@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Curator</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --surface2: #1a1a1a;
+    --border: #222222;
+    --accent: #e8c547;
+    --accent2: #c49a2a;
+    --text: #e8e4dc;
+    --text-muted: #666666;
+    --text-dim: #333333;
+    --danger: #c0392b;
+    --success: #27ae60;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 20px 40px; /* extra top for traffic lights */
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* macOS traffic light clearance */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 50% 0%, rgba(232,197,71,0.04) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 60% at 100% 50%, rgba(232,197,71,0.02) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .grain {
+    position: fixed;
+    inset: 0;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Draggable titlebar area */
+  .titlebar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 52px;
+    -webkit-app-region: drag;
+    z-index: 100;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 720px;
+    position: relative;
+    z-index: 1;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 52px;
+    letter-spacing: -1px;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .logo span { color: var(--accent); font-style: italic; }
+
+  .tagline {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 28px;
+    margin-bottom: 16px;
+  }
+
+  .panel-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .panel-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .setup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+  .field-group.full { grid-column: 1 / -1; }
+
+  label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  input[type="text"], input[type="password"], textarea, select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 10px 12px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+
+  select option { background: var(--surface2); }
+  textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+
+  /* Trakt section */
+  .trakt-section { margin-top: 8px; }
+
+  .trakt-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    margin-bottom: 12px;
+  }
+
+  .trakt-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .trakt-dot.connected { background: var(--success); }
+  .trakt-dot.error { background: var(--danger); }
+
+  .trakt-status-text { font-size: 12px; color: var(--text-muted); flex: 1; }
+  .trakt-status-text strong { color: var(--text); display: block; }
+
+  .trakt-btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* File drop (CSV fallback) */
+  .file-drop {
+    border: 1px dashed var(--border);
+    border-radius: 2px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface2);
+    position: relative;
+  }
+
+  .file-drop:hover, .file-drop.drag-over {
+    border-color: var(--accent);
+    background: rgba(232,197,71,0.03);
+  }
+
+  .file-drop input[type="file"] {
+    position: absolute; inset: 0; opacity: 0;
+    cursor: pointer; width: 100%; height: 100%;
+  }
+
+  .file-drop-text { font-size: 11px; color: var(--text-muted); pointer-events: none; }
+  .file-drop-text strong { color: var(--accent); display: block; font-size: 13px; margin-bottom: 4px; }
+  .file-status { font-size: 11px; color: var(--success); margin-top: 8px; display: none; }
+
+  .mood-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .chip {
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: 1px;
+    cursor: pointer; transition: all 0.15s; background: transparent;
+    color: var(--text-muted); font-family: 'DM Mono', monospace;
+  }
+
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.active { border-color: var(--accent); background: rgba(232,197,71,0.1); color: var(--accent); }
+
+  .btn-primary {
+    width: 100%; padding: 16px;
+    background: var(--accent); color: #0a0a0a;
+    border: none; border-radius: 2px;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    font-weight: 500; letter-spacing: 3px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s;
+    position: relative; overflow: hidden;
+  }
+
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:disabled { background: var(--border); color: var(--text-dim); cursor: not-allowed; }
+
+  .btn-secondary {
+    padding: 10px 20px; background: transparent;
+    color: var(--text-muted); border: 1px solid var(--border);
+    border-radius: 2px; font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s;
+  }
+
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-small {
+    padding: 7px 14px; background: transparent;
+    color: var(--text-muted); border: 1px solid var(--border);
+    border-radius: 2px; font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s;
+  }
+
+  .btn-small:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Result card */
+  .result-card {
+    display: none; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 2px;
+    overflow: hidden; margin-bottom: 16px;
+    animation: fadeUp 0.4s ease forwards;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .result-header { padding: 24px 28px 20px; border-bottom: 1px solid var(--border); }
+  .result-year { font-size: 10px; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
+  .result-title { font-family: 'DM Serif Display', serif; font-size: 36px; line-height: 1.1; letter-spacing: -0.5px; color: var(--text); }
+
+  .result-meta { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+
+  .meta-tag {
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-muted); padding: 4px 8px;
+    border: 1px solid var(--border); border-radius: 1px;
+  }
+
+  .result-body { padding: 24px 28px; }
+  .result-section { margin-bottom: 20px; }
+  .result-section-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .result-text { font-size: 13px; line-height: 1.8; color: var(--text); }
+  .result-why { font-size: 13px; line-height: 1.8; color: var(--text-muted); font-style: italic; }
+  .result-where { font-size: 13px; color: var(--text); }
+
+  .result-actions {
+    padding: 20px 28px; border-top: 1px solid var(--border);
+    display: flex; gap: 12px; align-items: center;
+  }
+
+  /* Loading */
+  .loading-bar { display: none; height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; margin-bottom: 16px; }
+  .loading-bar.active { display: block; }
+  .loading-bar-fill { height: 100%; background: var(--accent); width: 0%; animation: loadingPulse 2s ease-in-out infinite; }
+
+  @keyframes loadingPulse {
+    0% { width: 0%; margin-left: 0%; }
+    50% { width: 60%; margin-left: 20%; }
+    100% { width: 0%; margin-left: 100%; }
+  }
+
+  .status-text {
+    font-size: 11px; color: var(--text-muted); text-align: center;
+    letter-spacing: 1px; min-height: 20px; margin-bottom: 12px;
+  }
+
+  .error-msg {
+    font-size: 12px; color: var(--danger);
+    padding: 12px; border: 1px solid rgba(192,57,43,0.3);
+    border-radius: 2px; margin-bottom: 16px; display: none;
+  }
+
+  .history-count { font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 6px; }
+
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  .collapsible-header {
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer; user-select: none;
+  }
+
+  .collapsible-header:hover .toggle-icon { color: var(--accent); }
+  .toggle-icon { font-size: 18px; color: var(--text-muted); transition: transform 0.2s; }
+  .toggle-icon.open { transform: rotate(45deg); }
+  .collapsible-body { display: none; margin-top: 16px; }
+  .collapsible-body.open { display: block; }
+
+  .cred-saved { font-size: 10px; color: var(--success); margin-top: 4px; display: none; }
+
+  /* Mode toggle */
+  .mode-toggle {
+    display: flex;
+    gap: 0;
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .mode-btn {
+    flex: 1; padding: 12px 8px;
+    background: transparent; border: none;
+    border-right: 1px solid var(--border);
+    color: var(--text-muted); font-family: 'DM Mono', monospace;
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.15s;
+  }
+
+  .mode-btn:last-child { border-right: none; }
+  .mode-btn:hover { background: var(--surface2); color: var(--text); }
+  .mode-btn.active { background: rgba(232,197,71,0.08); color: var(--accent); }
+
+  footer {
+    text-align: center; margin-top: 40px;
+    font-size: 10px; color: var(--text-dim); letter-spacing: 2px;
+  }
+</style>
+</head>
+<body>
+<div class="titlebar"></div>
+<div class="grain"></div>
+
+<div class="container">
+  <header>
+    <div class="logo">Cur<span>ator</span></div>
+    <div class="tagline" id="tagline">Personalized documentary recommendations</div>
+  </header>
+
+  <!-- Mode Toggle -->
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="documentaries" onclick="setMode(this)">Documentaries</button>
+    <button class="mode-btn" data-mode="movies" onclick="setMode(this)">Movies</button>
+    <button class="mode-btn" data-mode="shows" onclick="setMode(this)">Shows</button>
+  </div>
+
+  <!-- Setup Panel -->
+  <div class="panel" id="setupPanel">
+    <div class="collapsible-header" onclick="toggleCollapse(this)" id="setupHeader">
+      <div class="panel-label" style="margin-bottom:0">Configuration</div>
+      <div class="toggle-icon">+</div>
+    </div>
+    <div class="collapsible-body open" id="setupBody">
+
+    <div class="setup-grid">
+      <div class="field-group full">
+        <label>Anthropic API Key</label>
+        <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
+        <div style="display:flex;justify-content:flex-end;margin-top:6px">
+          <button class="btn-small" onclick="saveApiKey()">Save Key</button>
+        </div>
+        <div class="cred-saved" id="apiKeySaved">✓ Saved to keychain</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Trakt OAuth Section -->
+    <div class="panel-label">Trakt Watch History</div>
+
+    <div id="traktSetup">
+      <!-- Step 1: credentials not yet entered -->
+      <div id="traktCredsForm">
+        <div class="setup-grid">
+          <div class="field-group">
+            <label>Trakt Client ID</label>
+            <input type="password" id="traktClientId" placeholder="Client ID from trakt.tv/oauth/applications" autocomplete="off" />
+          </div>
+          <div class="field-group">
+            <label>Trakt Client Secret</label>
+            <input type="password" id="traktClientSecret" placeholder="Client Secret" autocomplete="off" />
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text-muted);line-height:1.7">
+            Register a free app at <span style="color:var(--accent)">trakt.tv/oauth/applications</span> — set Redirect URI to <span style="color:var(--accent)">http://localhost:47821/callback</span>
+          </div>
+        </div>
+        <div class="trakt-btn-row">
+          <button class="btn-small" onclick="saveTraktCreds()">Save &amp; Connect Trakt</button>
+        </div>
+        <div class="cred-saved" id="traktCredsSaved">✓ Credentials saved</div>
+      </div>
+
+      <!-- Step 2: creds saved, need to auth -->
+      <div id="traktAuthSection" style="display:none">
+        <div class="trakt-status">
+          <div class="trakt-dot" id="traktDot"></div>
+          <div class="trakt-status-text">
+            <strong id="traktStatusTitle">Not connected</strong>
+            <span id="traktStatusSub">Click below to authorize with your Trakt account</span>
+          </div>
+        </div>
+        <div class="trakt-btn-row">
+          <button class="btn-small" id="traktConnectBtn" onclick="connectTrakt()">Connect Trakt →</button>
+          <button class="btn-small" id="traktDisconnectBtn" onclick="disconnectTrakt()" style="display:none">Disconnect</button>
+          <button class="btn-small" onclick="resetTraktCreds()" style="color:var(--text-dim)">Change Credentials</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- CSV Fallback -->
+    <div class="collapsible-header" onclick="toggleCollapse(this)">
+      <div class="panel-label" style="margin-bottom:0">CSV Fallback <span style="color:var(--text-dim);font-size:10px;margin-left:8px">— if Trakt isn't connected</span></div>
+      <div class="toggle-icon">+</div>
+    </div>
+    <div class="collapsible-body">
+      <div class="file-drop" id="fileDrop">
+        <input type="file" id="csvFile" accept=".csv" />
+        <div class="file-drop-text">
+          <strong>Drop your Trakt CSV here</strong>
+          or click to browse — export from trakt.tv → Settings → Data
+        </div>
+      </div>
+      <div class="file-status" id="fileStatus"></div>
+      <div class="history-count" id="historyCount"></div>
+    </div>
+  </div></div>
+
+  <!-- Mood Panel -->
+  <div class="panel">
+    <div class="collapsible-header" onclick="toggleCollapse(this)">
+      <div class="panel-label" style="margin-bottom:0">Mood Filter <span style="color:var(--text-dim);font-size:10px;margin-left:8px">— optional</span></div>
+      <div class="toggle-icon">+</div>
+    </div>
+    <div class="collapsible-body">
+      <div class="mood-chips" id="moodChips">
+        <button class="chip" onclick="toggleChip(this)">Dark &amp; Heavy</button>
+        <button class="chip" onclick="toggleChip(this)">Corporate Corruption</button>
+        <button class="chip" onclick="toggleChip(this)">Crime &amp; Justice</button>
+        <button class="chip" onclick="toggleChip(this)">Cults &amp; Extremism</button>
+        <button class="chip" onclick="toggleChip(this)">Politics &amp; Power</button>
+        <button class="chip" onclick="toggleChip(this)">War &amp; History</button>
+        <button class="chip" onclick="toggleChip(this)">Music</button>
+        <button class="chip" onclick="toggleChip(this)">Science &amp; Medicine</button>
+        <button class="chip" onclick="toggleChip(this)">Lighter Today</button>
+        <button class="chip" onclick="toggleChip(this)">Deep Cut / Obscure</button>
+        <button class="chip" onclick="toggleChip(this)">Character Study</button>
+        <button class="chip" onclick="toggleChip(this)">Surprising / Weird</button>
+      </div>
+      <div style="margin-top:16px">
+        <label>Or describe your mood</label>
+        <textarea id="customMood" placeholder="e.g. something about systemic failure, or a compelling villain, or just something I've never heard of..." style="margin-top:6px;height:60px;"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-msg" id="errorMsg"></div>
+
+  <!-- Loading -->
+  <div class="loading-bar" id="loadingBar"><div class="loading-bar-fill"></div></div>
+  <div class="status-text" id="statusText"></div>
+
+  <!-- Result Card -->
+  <div class="result-card" id="resultCard">
+    <div class="result-header">
+      <div class="result-year" id="resYear"></div>
+      <div class="result-title" id="resTitle"></div>
+      <div class="result-meta" id="resMeta"></div>
+    </div>
+    <div class="result-body">
+      <div class="result-section">
+        <div class="result-section-label">Synopsis</div>
+        <div class="result-text" id="resSynopsis"></div>
+      </div>
+      <div class="result-section">
+        <div class="result-section-label">Why this for you</div>
+        <div class="result-why" id="resWhy"></div>
+      </div>
+      <div class="result-section">
+        <div class="result-section-label">Where to watch</div>
+        <div class="result-where" id="resWhere"></div>
+      </div>
+    </div>
+    <div class="result-actions">
+      <button class="btn-primary" style="flex:1" onclick="getRecommendation()">Next Pick →</button>
+      <button class="btn-secondary" onclick="markSeen()">Mark Seen</button>
+    </div>
+  </div>
+
+  <!-- Main CTA -->
+  <button class="btn-primary" id="mainBtn" onclick="getRecommendation()">
+    ▶ &nbsp; Pick a Documentary
+  </button>
+
+  <footer>Curator · Powered by Claude · Your data stays local</footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
