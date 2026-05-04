@@ -360,6 +360,91 @@
     text-align: center; margin-top: 40px;
     font-size: 10px; color: var(--text-dim); letter-spacing: 2px;
   }
+
+  /* Result secondary actions row */
+  .result-secondary-actions {
+    padding: 0 28px 20px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  /* Trakt section in result card */
+  .trakt-result-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .trakt-rating {
+    font-size: 14px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .trakt-votes {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .trakt-loading {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  .trakt-link-btn {
+    margin-left: auto;
+  }
+
+  /* History panel */
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  .history-item:last-child { border-bottom: none; }
+
+  .history-mode {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    width: 32px;
+    flex-shrink: 0;
+  }
+
+  .history-title {
+    flex: 1;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .history-year {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .history-date {
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .history-watchlist {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--success);
+    margin-left: 4px;
+  }
 </style>
 </head>
 <body>
@@ -516,13 +601,20 @@
         <div class="result-why" id="resWhy"></div>
       </div>
       <div class="result-section">
-        <div class="result-section-label">Where to watch</div>
-        <div class="result-where" id="resWhere"></div>
+        <div class="result-section-label">Trakt</div>
+        <div id="resTraktSection"><span style="color:var(--text-dim);font-size:11px">—</span></div>
       </div>
     </div>
     <div class="result-actions">
-      <button class="btn-primary" style="flex:1" onclick="getRecommendation()">Next Pick →</button>
-      <button class="btn-secondary" onclick="markSeen()">Mark Seen</button>
+      <button class="btn-primary" id="nextPickBtn" style="flex:1" onclick="getRecommendation()">Next Documentary →</button>
+      <button class="btn-secondary" onclick="moreLikeThis()">More Like This</button>
+    </div>
+    <div class="result-secondary-actions">
+      <button class="btn-small" id="watchlistBtn" onclick="addToWatchlist()" style="display:none">+ Watchlist</button>
+      <button class="btn-small" onclick="markSeen()">Mark Seen</button>
+      <div style="flex:1"></div>
+      <button class="btn-small" id="likeBtn" onclick="setFeedback('liked')" title="Good call">👍</button>
+      <button class="btn-small" id="dislikeBtn" onclick="setFeedback('disliked')" title="Not for me">👎</button>
     </div>
   </div>
 
@@ -530,6 +622,15 @@
   <button class="btn-primary" id="mainBtn" onclick="getRecommendation()">
     ▶ &nbsp; Pick a Documentary
   </button>
+
+  <!-- History Panel -->
+  <div class="panel" id="historyPanel" style="display:none; margin-top:16px">
+    <div class="collapsible-header" onclick="toggleCollapse(this)">
+      <div class="panel-label" style="margin-bottom:0">History</div>
+      <div class="toggle-icon">+</div>
+    </div>
+    <div class="collapsible-body open" id="historyList"></div>
+  </div>
 
   <footer>Curator · Powered by Claude · Your data stays local</footer>
 </div>

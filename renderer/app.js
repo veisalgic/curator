@@ -1,13 +1,14 @@
-// DocPicker renderer — talks to main process via window.docpicker (preload bridge)
+// Curator renderer — talks to main process via window.docpicker (preload bridge)
 
 const api = window.docpicker;
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let watchedMovieTitles = new Set();  // from Trakt or CSV
+let watchedMovieTitles = new Set();
 let watchedShowTitles = new Set();
 let seenThisSession = new Set();
 let traktConnected = false;
 let lastRec = null;
+let moreLikeSeed = null;  // { title, year } set by "More Like This"
 let currentMode = 'documentaries'; // 'documentaries' | 'movies' | 'shows'
 
 // ── Mode Toggle ───────────────────────────────────────────────────────────────
@@ -23,14 +24,20 @@ const mainBtnLabels = {
   shows: '▶  Pick a Show',
 };
 
+const nextLabels = {
+  documentaries: 'Next Documentary →',
+  movies: 'Next Movie →',
+  shows: 'Next Show →',
+};
+
 function setMode(btn) {
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   currentMode = btn.dataset.mode;
+  moreLikeSeed = null;
   document.getElementById('tagline').textContent = taglines[currentMode];
   const mainBtn = document.getElementById('mainBtn');
   if (!mainBtn.disabled) mainBtn.textContent = mainBtnLabels[currentMode];
-  // Clear previous result when switching modes
   document.getElementById('resultCard').style.display = 'none';
   seenThisSession.clear();
   setStatus('');
@@ -56,10 +63,11 @@ async function init() {
     await loadTraktHistory();
   }
 
-  // Auto-collapse setup if fully configured
   if (creds.hasAnthropic && creds.hasTraktToken) {
     collapseSetup();
   }
+
+  await renderHistory();
 }
 
 function collapseSetup() {
@@ -67,7 +75,6 @@ function collapseSetup() {
   const icon = document.querySelector('#setupHeader .toggle-icon');
   body.classList.remove('open');
   icon.classList.remove('open');
-  // Update label to show configured state
   document.querySelector('#setupHeader .panel-label').textContent = 'Configuration  ✓';
 }
 
@@ -92,11 +99,9 @@ async function saveTraktCreds() {
   }
   await api.saveCred('traktClientId', clientId);
   await api.saveCred('traktClientSecret', clientSecret);
-
   const el = document.getElementById('traktCredsSaved');
   el.style.display = 'block';
   setTimeout(() => el.style.display = 'none', 2000);
-
   showTraktAuthSection();
 }
 
@@ -133,6 +138,12 @@ function setTraktConnected(connected) {
     connectBtn.style.display = 'inline-block';
     disconnectBtn.style.display = 'none';
   }
+
+  // Update watchlist button visibility if card is showing
+  const card = document.getElementById('resultCard');
+  if (card.style.display !== 'none') {
+    document.getElementById('watchlistBtn').style.display = connected ? 'inline-block' : 'none';
+  }
 }
 
 // ── Trakt OAuth Flow ──────────────────────────────────────────────────────────
@@ -150,7 +161,6 @@ async function connectTrakt() {
     setTraktConnected(true);
     await loadTraktHistory();
     setStatus('');
-    // Collapse setup now that everything is configured
     const creds = await api.getAllCreds();
     if (creds.hasAnthropic) collapseSetup();
   } catch (err) {
@@ -286,7 +296,7 @@ function showError(msg) {
 }
 
 // ── Prompts per mode ──────────────────────────────────────────────────────────
-function buildPrompt(mode, watchedList, seenList, moodText) {
+function buildPrompt(mode, watchedList, seenList, moodText, seed, likedTitles) {
   const avoidBlock = watchedList
     ? `Their watch history includes these titles (do NOT recommend any of these):\n${watchedList}\n`
     : '(No watch history provided — treat as a blank slate)\n';
@@ -295,11 +305,39 @@ function buildPrompt(mode, watchedList, seenList, moodText) {
     ? `Also do NOT recommend these (already suggested this session): ${seenList}\n`
     : '';
 
+  const seedBlock = seed
+    ? `\nThe user wants something similar to: ${seed.title} (${seed.year}). Prioritize similar themes, tone, or subject matter.\n`
+    : '';
+
+  const likedBlock = likedTitles && likedTitles.length > 0
+    ? `\nTitles this user has responded positively to: ${likedTitles.join(', ')} — use these as taste signals.\n`
+    : '';
+
+  const jsonFormat = mode === 'shows'
+    ? `{
+  "title": "Show Title",
+  "year": "2019",
+  "runtime": "6 seasons / 8 episodes",
+  "genres": ["Crime", "Drama"],
+  "synopsis": "2-3 sentence synopsis of the show.",
+  "why": "1-2 sentences on why this specific viewer will love it based on their taste."
+}`
+    : `{
+  "title": "Film Title",
+  "year": "2019",
+  "runtime": "94 min",
+  "genres": ["Crime", "Politics"],
+  "synopsis": "2-3 sentence synopsis of the film.",
+  "why": "1-2 sentences on why this specific viewer will love it based on their taste."
+}`;
+
   if (mode === 'documentaries') {
     return `You are a documentary recommendation engine for a very experienced documentary viewer who has seen over 1,000 documentaries.
 
 ${avoidBlock}
 ${seenBlock}
+${seedBlock}
+${likedBlock}
 ${moodText}
 
 Their taste profile:
@@ -311,15 +349,7 @@ Their taste profile:
 - Has seen most major award-winning docs, so go deeper
 
 Recommend ONE documentary film. Respond ONLY in this exact JSON format with no other text:
-{
-  "title": "Film Title",
-  "year": "2019",
-  "runtime": "94 min",
-  "genres": ["Crime", "Politics"],
-  "synopsis": "2-3 sentence synopsis of the film.",
-  "why": "1-2 sentences on why this specific viewer will love it based on their taste.",
-  "where": "Where to stream or find it (Netflix, HBO, Amazon, YouTube, etc.)"
-}`;
+${jsonFormat}`;
   }
 
   if (mode === 'movies') {
@@ -327,6 +357,8 @@ Recommend ONE documentary film. Respond ONLY in this exact JSON format with no o
 
 ${avoidBlock}
 ${seenBlock}
+${seedBlock}
+${likedBlock}
 ${moodText}
 
 Their taste profile:
@@ -337,15 +369,7 @@ Their taste profile:
 - Enjoys thrillers, crime, drama, dark comedy, and prestige films
 
 Recommend ONE movie (any genre except documentary). Respond ONLY in this exact JSON format with no other text:
-{
-  "title": "Film Title",
-  "year": "2019",
-  "runtime": "118 min",
-  "genres": ["Thriller", "Drama"],
-  "synopsis": "2-3 sentence synopsis of the film.",
-  "why": "1-2 sentences on why this specific viewer will love it based on their taste.",
-  "where": "Where to stream or find it (Netflix, HBO, Amazon, etc.)"
-}`;
+${jsonFormat}`;
   }
 
   // shows
@@ -353,6 +377,8 @@ Recommend ONE movie (any genre except documentary). Respond ONLY in this exact J
 
 ${avoidBlock}
 ${seenBlock}
+${seedBlock}
+${likedBlock}
 ${moodText}
 
 Their taste profile:
@@ -363,15 +389,7 @@ Their taste profile:
 - Not interested in reality TV or pure procedurals
 
 Recommend ONE TV show or limited series. Respond ONLY in this exact JSON format with no other text:
-{
-  "title": "Show Title",
-  "year": "2019",
-  "runtime": "6 seasons / 8 episodes",
-  "genres": ["Crime", "Drama"],
-  "synopsis": "2-3 sentence synopsis of the show.",
-  "why": "1-2 sentences on why this specific viewer will love it based on their taste.",
-  "where": "Where to stream or find it (Netflix, HBO, Amazon, etc.)"
-}`;
+${jsonFormat}`;
 }
 
 // ── Recommendation ────────────────────────────────────────────────────────────
@@ -393,30 +411,52 @@ async function getRecommendation() {
 
   showError('');
   setLoading(true);
-  setStatus('Consulting your watch history...');
+
+  // Capture and reset the seed before the async call
+  const seedToUse = moreLikeSeed;
+  moreLikeSeed = null;
+
+  setStatus(seedToUse ? `Finding something like "${seedToUse.title}"...` : 'Consulting your watch history...');
 
   const { chips, custom } = getActiveMoods();
   const moodText = chips.length > 0 || custom
     ? `Mood filters: ${chips.join(', ')}${custom ? '. Additional context: ' + custom : ''}`
     : 'No specific mood — just pick something great.';
 
-  // Pick the right watched list based on mode
   const isShows = currentMode === 'shows';
   const relevantTitles = isShows ? watchedShowTitles : watchedMovieTitles;
   const watchedList = [...relevantTitles].slice(0, 800).join(', ');
   const seenList = [...seenThisSession].join(', ');
 
-  const prompt = buildPrompt(currentMode, watchedList, seenList, moodText);
+  // Pull liked titles from history as taste signals
+  let likedTitles = [];
+  try {
+    const history = await api.getHistory();
+    likedTitles = history
+      .filter(e => e.feedback === 'liked' && e.mode === currentMode)
+      .slice(0, 5)
+      .map(e => e.title);
+  } catch (e) { /* non-fatal */ }
+
+  const prompt = buildPrompt(currentMode, watchedList, seenList, moodText, seedToUse, likedTitles);
 
   try {
     const text = await api.getRecommendation(prompt);
     const clean = text.replace(/```json|```/g, '').trim();
     const rec = JSON.parse(clean);
-    lastRec = rec;
+    const timestamp = new Date().toISOString();
+    lastRec = { ...rec, timestamp };
     seenThisSession.add(rec.title.toLowerCase());
     displayResult(rec);
     setLoading(false);
     setStatus('');
+
+    // Save to history (non-blocking)
+    api.addHistory({ ...rec, mode: currentMode, timestamp, feedback: null, addedToWatchlist: false }).catch(() => {});
+    renderHistory().catch(() => {});
+
+    // Trakt lookup (async — updates card when done)
+    lookupTrakt(rec.title);
   } catch (err) {
     setLoading(false);
     setStatus('');
@@ -429,25 +469,127 @@ function displayResult(rec) {
   document.getElementById('resTitle').textContent = rec.title;
   document.getElementById('resSynopsis').textContent = rec.synopsis;
   document.getElementById('resWhy').textContent = rec.why;
-  document.getElementById('resWhere').textContent = rec.where;
 
   const meta = document.getElementById('resMeta');
   meta.innerHTML = '';
   if (rec.runtime) meta.innerHTML += `<span class="meta-tag">${rec.runtime}</span>`;
   (rec.genres || []).forEach(g => meta.innerHTML += `<span class="meta-tag">${g}</span>`);
 
+  // Reset action buttons
+  document.getElementById('nextPickBtn').textContent = nextLabels[currentMode];
+  const wlBtn = document.getElementById('watchlistBtn');
+  wlBtn.style.display = traktConnected ? 'inline-block' : 'none';
+  wlBtn.textContent = '+ Watchlist';
+  wlBtn.disabled = false;
+  wlBtn.style.color = '';
+  wlBtn.style.borderColor = '';
+  document.getElementById('likeBtn').style.color = '';
+  document.getElementById('likeBtn').style.borderColor = '';
+  document.getElementById('dislikeBtn').style.color = '';
+  document.getElementById('dislikeBtn').style.borderColor = '';
+
+  // Trakt section — loading state
+  document.getElementById('resTraktSection').innerHTML = traktConnected
+    ? '<span class="trakt-loading">Looking up on Trakt...</span>'
+    : '<span style="color:var(--text-dim);font-size:11px">Connect Trakt to see rating</span>';
+
   const card = document.getElementById('resultCard');
   card.style.display = 'block';
   card.style.animation = 'none';
   card.offsetHeight;
   card.style.animation = 'fadeUp 0.4s ease forwards';
-
-  const nextLabel = { documentaries: 'Next Documentary →', movies: 'Next Movie →', shows: 'Next Show →' };
-  card.querySelector('.result-actions .btn-primary').textContent = nextLabel[currentMode];
-
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+// ── Trakt lookup (post-recommendation) ───────────────────────────────────────
+async function lookupTrakt(title) {
+  if (!traktConnected) return;
+  try {
+    const data = await api.traktLookup({ title, mode: currentMode });
+    if (lastRec) lastRec.traktData = data;
+
+    if (!data) {
+      document.getElementById('resTraktSection').innerHTML =
+        '<span style="color:var(--text-dim);font-size:11px">Not found on Trakt</span>';
+      return;
+    }
+
+    const ratingHtml = data.rating
+      ? `<span class="trakt-rating">★ ${data.rating}/10</span><span class="trakt-votes">(${(data.votes || 0).toLocaleString()} votes)</span>`
+      : '<span style="color:var(--text-dim);font-size:11px">No rating yet</span>';
+
+    const linkHtml = data.slug
+      ? `<button class="btn-small trakt-link-btn" onclick="openTraktPage()">View on Trakt →</button>`
+      : '';
+
+    document.getElementById('resTraktSection').innerHTML =
+      `<div class="trakt-result-row">${ratingHtml}${linkHtml}</div>`;
+  } catch (e) {
+    document.getElementById('resTraktSection').innerHTML =
+      '<span style="color:var(--text-dim);font-size:11px">Trakt lookup failed</span>';
+  }
+}
+
+function openTraktPage() {
+  if (!lastRec?.traktData?.slug) return;
+  const type = currentMode === 'shows' ? 'shows' : 'movies';
+  api.openExternal(`https://trakt.tv/${type}/${lastRec.traktData.slug}`);
+}
+
+// ── More Like This ────────────────────────────────────────────────────────────
+function moreLikeThis() {
+  if (!lastRec) return;
+  moreLikeSeed = { title: lastRec.title, year: lastRec.year };
+  getRecommendation();
+}
+
+// ── Add to Trakt Watchlist ────────────────────────────────────────────────────
+async function addToWatchlist() {
+  if (!lastRec) return;
+  const btn = document.getElementById('watchlistBtn');
+  btn.disabled = true;
+  btn.textContent = 'Adding...';
+  try {
+    await api.traktAddWatchlist({
+      traktId: lastRec.traktData?.traktId,
+      title: lastRec.title,
+      year: lastRec.year,
+      mode: currentMode,
+    });
+    btn.textContent = '✓ Watchlisted';
+    btn.style.color = 'var(--success)';
+    btn.style.borderColor = 'var(--success)';
+    if (lastRec.timestamp) {
+      api.setWatchlisted({ timestamp: lastRec.timestamp }).catch(() => {});
+      renderHistory().catch(() => {});
+    }
+  } catch (e) {
+    btn.textContent = '+ Watchlist';
+    btn.disabled = false;
+    showError('Watchlist error: ' + e.message);
+  }
+}
+
+// ── Feedback ──────────────────────────────────────────────────────────────────
+function setFeedback(type) {
+  if (!lastRec?.timestamp) return;
+  const likeBtn = document.getElementById('likeBtn');
+  const dislikeBtn = document.getElementById('dislikeBtn');
+  if (type === 'liked') {
+    likeBtn.style.color = 'var(--accent)';
+    likeBtn.style.borderColor = 'var(--accent)';
+    dislikeBtn.style.color = '';
+    dislikeBtn.style.borderColor = '';
+  } else {
+    dislikeBtn.style.color = 'var(--danger)';
+    dislikeBtn.style.borderColor = 'var(--danger)';
+    likeBtn.style.color = '';
+    likeBtn.style.borderColor = '';
+  }
+  api.setFeedback({ timestamp: lastRec.timestamp, feedback: type }).catch(() => {});
+}
+
+// ── Mark Seen ─────────────────────────────────────────────────────────────────
 function markSeen() {
   if (lastRec) {
     seenThisSession.add(lastRec.title.toLowerCase());
@@ -459,6 +601,41 @@ function markSeen() {
     document.getElementById('resultCard').style.display = 'none';
     setStatus(`Marked "${lastRec.title}" as seen. Click Pick to get a new recommendation.`);
   }
+}
+
+// ── History Panel ─────────────────────────────────────────────────────────────
+async function renderHistory() {
+  let history = [];
+  try {
+    history = await api.getHistory();
+  } catch (e) {
+    return;
+  }
+
+  const panel = document.getElementById('historyPanel');
+  if (history.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+  const list = document.getElementById('historyList');
+  const modeShortMap = { documentaries: 'doc', movies: 'film', shows: 'show' };
+  list.innerHTML = history.slice(0, 30).map(entry => {
+    const date = new Date(entry.timestamp);
+    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const modeShort = modeShortMap[entry.mode] || entry.mode;
+    const feedbackIcon = entry.feedback === 'liked' ? ' 👍' : entry.feedback === 'disliked' ? ' 👎' : '';
+    const watchlistBadge = entry.addedToWatchlist
+      ? ' <span class="history-watchlist">✓ list</span>'
+      : '';
+    return `<div class="history-item">
+      <span class="history-mode">${modeShort}</span>
+      <span class="history-title">${entry.title}${feedbackIcon}</span>
+      <span class="history-year">${entry.year}</span>
+      <span class="history-date">${dateStr}${watchlistBadge}</span>
+    </div>`;
+  }).join('');
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
