@@ -139,11 +139,6 @@ function setTraktConnected(connected) {
     disconnectBtn.style.display = 'none';
   }
 
-  // Update watchlist button visibility if card is showing
-  const card = document.getElementById('resultCard');
-  if (card.style.display !== 'none') {
-    document.getElementById('watchlistBtn').style.display = connected ? 'inline-block' : 'none';
-  }
 }
 
 // ── Trakt OAuth Flow ──────────────────────────────────────────────────────────
@@ -478,7 +473,7 @@ function displayResult(rec) {
   // Reset action buttons
   document.getElementById('nextPickBtn').textContent = nextLabels[currentMode];
   const wlBtn = document.getElementById('watchlistBtn');
-  wlBtn.style.display = traktConnected ? 'inline-block' : 'none';
+  wlBtn.style.display = 'inline-block';
   wlBtn.textContent = '+ Watchlist';
   wlBtn.disabled = false;
   wlBtn.style.color = '';
