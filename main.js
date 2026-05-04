@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, safeStorage, Menu, MenuItem } = require('electron');
 const path = require('path');
 const https = require('https');
 const http = require('http');
@@ -424,6 +424,23 @@ function createWindow() {
   });
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.once('ready-to-show', () => mainWindow.show());
+
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const menu = new Menu();
+    if (params.isEditable) {
+      if (params.selectionText) {
+        menu.append(new MenuItem({ label: 'Cut', role: 'cut' }));
+        menu.append(new MenuItem({ label: 'Copy', role: 'copy' }));
+        menu.append(new MenuItem({ type: 'separator' }));
+      }
+      menu.append(new MenuItem({ label: 'Paste', role: 'paste' }));
+      menu.append(new MenuItem({ type: 'separator' }));
+      menu.append(new MenuItem({ label: 'Select All', role: 'selectAll' }));
+    } else if (params.selectionText) {
+      menu.append(new MenuItem({ label: 'Copy', role: 'copy' }));
+    }
+    if (menu.items.length > 0) menu.popup({ window: mainWindow });
+  });
   if (process.argv.includes('--dev')) {
     mainWindow.webContents.openDevTools();
   }

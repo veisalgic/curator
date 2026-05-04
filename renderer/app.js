@@ -633,5 +633,14 @@ async function renderHistory() {
   }).join('');
 }
 
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function copyRedirectUri(el) {
+  navigator.clipboard.writeText('http://localhost:47821/callback').then(() => {
+    const orig = el.textContent;
+    el.textContent = 'Copied!';
+    setTimeout(() => { el.textContent = orig; }, 1500);
+  });
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 init().catch(console.error);

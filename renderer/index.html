@@ -445,6 +445,24 @@
     color: var(--success);
     margin-left: 4px;
   }
+
+  .instr-link {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: rgba(232,197,71,0.4);
+    cursor: pointer;
+  }
+
+  .instr-link:hover { text-decoration-color: var(--accent); }
+
+  .copy-uri {
+    color: var(--accent);
+    cursor: pointer;
+    border-bottom: 1px dashed rgba(232,197,71,0.4);
+    transition: border-color 0.15s;
+  }
+
+  .copy-uri:hover { border-bottom-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -503,7 +521,7 @@
         </div>
         <div style="margin-bottom:12px">
           <div style="font-size:11px;color:var(--text-muted);line-height:1.7">
-            Register a free app at <span style="color:var(--accent)">trakt.tv/oauth/applications</span> — set Redirect URI to <span style="color:var(--accent)">http://localhost:47821/callback</span>
+            Register a free app at <a href="#" class="instr-link" onclick="api.openExternal('https://trakt.tv/oauth/applications'); return false;">trakt.tv/oauth/applications</a> — set Redirect URI to <span class="copy-uri" onclick="copyRedirectUri(this)" title="Click to copy">http://localhost:47821/callback</span>
           </div>
         </div>
         <div class="trakt-btn-row">
