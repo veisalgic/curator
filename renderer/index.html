@@ -560,25 +560,6 @@
 
     <div class="divider"></div>
 
-    <!-- Media Players -->
-    <div class="collapsible-header" onclick="toggleCollapse(this)">
-      <div class="panel-label" style="margin-bottom:0">Media Players <span style="color:var(--text-dim);font-size:10px;margin-left:8px">— optional</span></div>
-      <div class="toggle-icon">+</div>
-    </div>
-    <div class="collapsible-body">
-      <div class="field-group">
-        <label>Emby Server URL</label>
-        <input type="text" id="embyUrl" placeholder="http://localhost:8096" autocomplete="off" />
-        <div style="display:flex;justify-content:flex-end;margin-top:6px">
-          <button class="btn-small" onclick="saveEmbyUrl()">Save</button>
-        </div>
-        <div class="cred-saved" id="embyUrlSaved">✓ Saved</div>
-      </div>
-      <div style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.7">
-        Infuse search works automatically if you have it installed.
-      </div>
-    </div>
-
     <div class="divider"></div>
 
     <!-- CSV Fallback -->

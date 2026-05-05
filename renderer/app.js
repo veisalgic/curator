@@ -492,7 +492,7 @@ function displayResult(rec) {
 
   // Media player buttons
   document.getElementById('playerActions').style.display = 'flex';
-  document.getElementById('embySearchBtn').style.display = embyUrl ? 'inline-block' : 'none';
+  document.getElementById('embySearchBtn').style.display = 'inline-block';
 
   // Trakt section — loading state
   document.getElementById('resTraktSection').innerHTML = traktConnected
@@ -659,9 +659,9 @@ async function saveEmbyUrl() {
 }
 
 function searchEmby() {
-  if (!lastRec || !embyUrl) return;
+  if (!lastRec) return;
   const query = encodeURIComponent(lastRec.title);
-  api.openExternal(`${embyUrl}/web/index.html#!/search?query=${query}`);
+  api.openExternal(`emby://search?query=${query}`);
 }
 
 function searchInfuse() {
