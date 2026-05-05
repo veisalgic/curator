@@ -232,6 +232,7 @@ ipcMain.handle('creds:get-all', async () => {
   const traktClientId = await getCredential('traktClientId');
   const traktClientSecret = await getCredential('traktClientSecret');
   const traktAccessToken = await getCredential('traktAccessToken');
+  const embyUrl = await getCredential('embyUrl');
   return {
     hasAnthropic: !!anthropic,
     hasTraktClientId: !!traktClientId,
@@ -240,6 +241,7 @@ ipcMain.handle('creds:get-all', async () => {
     anthropic,
     traktClientId,
     traktClientSecret,
+    embyUrl,
   };
 });
 

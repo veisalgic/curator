@@ -10,6 +10,7 @@ let traktConnected = false;
 let lastRec = null;
 let moreLikeSeed = null;  // { title, year } set by "More Like This"
 let currentMode = 'documentaries'; // 'documentaries' | 'movies' | 'shows'
+let embyUrl = '';        // configured Emby server URL
 
 // ── Mode Toggle ───────────────────────────────────────────────────────────────
 const taglines = {
@@ -65,6 +66,12 @@ async function init() {
 
   if (creds.hasAnthropic && creds.hasTraktToken) {
     collapseSetup();
+  }
+
+  // Load Emby URL
+  if (creds.embyUrl) {
+    embyUrl = creds.embyUrl;
+    document.getElementById('embyUrl').value = creds.embyUrl;
   }
 
   await renderHistory();
@@ -483,6 +490,10 @@ function displayResult(rec) {
   document.getElementById('dislikeBtn').style.color = '';
   document.getElementById('dislikeBtn').style.borderColor = '';
 
+  // Media player buttons
+  document.getElementById('playerActions').style.display = 'flex';
+  document.getElementById('embySearchBtn').style.display = embyUrl ? 'inline-block' : 'none';
+
   // Trakt section — loading state
   document.getElementById('resTraktSection').innerHTML = traktConnected
     ? '<span class="trakt-loading">Looking up on Trakt...</span>'
@@ -631,6 +642,32 @@ async function renderHistory() {
       <span class="history-date">${dateStr}${watchlistBadge}</span>
     </div>`;
   }).join('');
+}
+
+// ── Media Player Search ───────────────────────────────────────────────────────
+async function saveEmbyUrl() {
+  const val = document.getElementById('embyUrl').value.trim().replace(/\/$/, '');
+  if (!val) return;
+  embyUrl = val;
+  document.getElementById('embyUrl').value = val;
+  await api.saveCred('embyUrl', val);
+  const el = document.getElementById('embyUrlSaved');
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 2000);
+  // Show Emby button on current result card if one is showing
+  if (lastRec) document.getElementById('embySearchBtn').style.display = 'inline-block';
+}
+
+function searchEmby() {
+  if (!lastRec || !embyUrl) return;
+  const query = encodeURIComponent(lastRec.title);
+  api.openExternal(`${embyUrl}/web/index.html#!/search?query=${query}`);
+}
+
+function searchInfuse() {
+  if (!lastRec) return;
+  const query = encodeURIComponent(lastRec.title);
+  api.openExternal(`infuse://search?query=${query}`);
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
