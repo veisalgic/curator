@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, shell, safeStorage, Menu, MenuItem } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, safeStorage, Menu, MenuItem, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const https = require('https');
 const http = require('http');
@@ -403,6 +404,114 @@ ipcMain.handle('claude:recommend', async (_, { prompt }) => {
   return result.body.content[0].text.trim();
 });
 
+// ── Auto-updater ──────────────────────────────────────────────────────────────
+let manualUpdateCheck = false;
+
+function setupUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = false;
+
+  autoUpdater.on('update-available', (info) => {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Update Available',
+      message: `Curator ${info.version} is available`,
+      detail: 'Downloading now in the background...',
+      buttons: ['OK'],
+    });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    if (manualUpdateCheck) {
+      manualUpdateCheck = false;
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Up to Date',
+        message: `You're running the latest version of Curator.`,
+        detail: `Version ${app.getVersion()}`,
+        buttons: ['OK'],
+      });
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Update Ready to Install',
+      message: `Curator ${info.version} has been downloaded`,
+      detail: 'Open the installer to complete the update.',
+      buttons: ['Install Now', 'Later'],
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall(false, true);
+    });
+  });
+
+  autoUpdater.on('error', (err) => {
+    if (manualUpdateCheck) {
+      manualUpdateCheck = false;
+      dialog.showMessageBox(mainWindow, {
+        type: 'error',
+        title: 'Update Check Failed',
+        message: 'Could not check for updates.',
+        detail: err.message,
+        buttons: ['OK'],
+      });
+    }
+  });
+
+  // Check on startup after a short delay
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 5000);
+}
+
+function buildMenu() {
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        {
+          label: 'Check for Updates...',
+          click: () => {
+            manualUpdateCheck = true;
+            autoUpdater.checkForUpdates().catch((err) => {
+              manualUpdateCheck = false;
+              dialog.showMessageBox(mainWindow, {
+                type: 'error',
+                title: 'Update Check Failed',
+                message: 'Could not check for updates.',
+                detail: err.message,
+                buttons: ['OK'],
+              });
+            });
+          },
+        },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 // ── Window ────────────────────────────────────────────────────────────────────
 let mainWindow;
 
@@ -446,6 +555,10 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  buildMenu();
+  createWindow();
+  setupUpdater();
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

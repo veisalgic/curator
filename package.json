@@ -15,11 +15,18 @@
     "electron": "^34.0.0",
     "electron-builder": "^25.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  },
   "build": {
     "appId": "com.curator.app",
     "productName": "Curator",
     "npmRebuild": false,
+    "publish": {
+      "provider": "github",
+      "owner": "veisalgic",
+      "repo": "curator"
+    },
     "mac": {
       "category": "public.app-category.entertainment",
       "icon": "assets/icon.icns",
