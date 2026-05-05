@@ -660,14 +660,24 @@ async function saveEmbyUrl() {
 
 function searchEmby() {
   if (!lastRec) return;
-  const query = encodeURIComponent(lastRec.title);
-  api.openExternal(`emby://search?query=${query}`);
+  navigator.clipboard.writeText(lastRec.title).then(() => {
+    const btn = document.getElementById('embySearchBtn');
+    const orig = btn.textContent;
+    btn.textContent = 'Title copied — paste to search';
+    api.openExternal('emby://');
+    setTimeout(() => { btn.textContent = orig; }, 3000);
+  });
 }
 
 function searchInfuse() {
   if (!lastRec) return;
-  const query = encodeURIComponent(lastRec.title);
-  api.openExternal(`infuse://search?query=${query}`);
+  navigator.clipboard.writeText(lastRec.title).then(() => {
+    const btn = document.getElementById('infuseSearchBtn');
+    const orig = btn.textContent;
+    btn.textContent = 'Title copied — paste to search';
+    api.openExternal('infuse7://');
+    setTimeout(() => { btn.textContent = orig; }, 3000);
+  });
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
