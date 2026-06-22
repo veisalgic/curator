@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Curator</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --surface2: #1a1a1a;
+    --border: #222222;
+    --accent: #e8c547;
+    --accent2: #c49a2a;
+    --text: #e8e4dc;
+    --text-muted: #666666;
+    --text-dim: #333333;
+    --danger: #c0392b;
+    --success: #27ae60;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 50% 0%, rgba(232,197,71,0.04) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 60% at 100% 50%, rgba(232,197,71,0.02) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 720px;
+    position: relative;
+    z-index: 1;
+  }
+
+  header { text-align: center; margin-bottom: 48px; }
+
+  .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 52px;
+    letter-spacing: -1px;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .logo span { color: var(--accent); font-style: italic; }
+
+  .tagline {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 28px;
+    margin-bottom: 16px;
+  }
+
+  .panel-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .panel-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .setup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+  .field-group.full { grid-column: 1 / -1; }
+
+  label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  input[type="text"], input[type="password"], textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 10px 12px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+
+  .trakt-section { margin-top: 8px; }
+
+  .trakt-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    margin-bottom: 12px;
+  }
+
+  .trakt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+  .trakt-dot.connected { background: var(--success); }
+
+  .trakt-status-text { font-size: 12px; color: var(--text-muted); flex: 1; }
+  .trakt-status-text strong { color: var(--text); display: block; }
+  .trakt-btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .file-drop {
+    border: 1px dashed var(--border);
+    border-radius: 2px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface2);
+    position: relative;
+  }
+
+  .file-drop:hover, .file-drop.drag-over { border-color: var(--accent); background: rgba(232,197,71,0.03); }
+  .file-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .file-drop-text { font-size: 11px; color: var(--text-muted); pointer-events: none; }
+  .file-drop-text strong { color: var(--accent); display: block; font-size: 13px; margin-bottom: 4px; }
+  .file-status { font-size: 11px; color: var(--success); margin-top: 8px; display: none; }
+
+  .mood-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .chip {
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: 1px;
+    cursor: pointer; transition: all 0.15s; background: transparent;
+    color: var(--text-muted); font-family: 'DM Mono', monospace;
+  }
+
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.active { border-color: var(--accent); background: rgba(232,197,71,0.1); color: var(--accent); }
+
+  .btn-primary {
+    width: 100%; padding: 16px;
+    background: var(--accent); color: #0a0a0a;
+    border: none; border-radius: 2px;
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    font-weight: 500; letter-spacing: 3px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s;
+  }
+
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:disabled { background: var(--border); color: var(--text-dim); cursor: not-allowed; }
+
+  .btn-secondary {
+    padding: 10px 20px; background: transparent;
+    color: var(--text-muted); border: 1px solid var(--border);
+    border-radius: 2px; font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s;
+  }
+
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-small {
+    padding: 7px 14px; background: transparent;
+    color: var(--text-muted); border: 1px solid var(--border);
+    border-radius: 2px; font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s;
+  }
+
+  .btn-small:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-small:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .result-card {
+    display: none; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 2px;
+    overflow: hidden; margin-bottom: 16px;
+    animation: fadeUp 0.4s ease forwards;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .result-header { padding: 24px 28px 20px; border-bottom: 1px solid var(--border); }
+  .result-year { font-size: 10px; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
+  .result-title { font-family: 'DM Serif Display', serif; font-size: 36px; line-height: 1.1; letter-spacing: -0.5px; color: var(--text); }
+  .result-meta { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+
+  .meta-tag {
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-muted); padding: 4px 8px;
+    border: 1px solid var(--border); border-radius: 1px;
+  }
+
+  .result-body { padding: 24px 28px; }
+  .result-section { margin-bottom: 20px; }
+  .result-section-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .result-text { font-size: 13px; line-height: 1.8; color: var(--text); }
+  .result-why { font-size: 13px; line-height: 1.8; color: var(--text-muted); font-style: italic; }
+
+  .result-actions {
+    padding: 20px 28px; border-top: 1px solid var(--border);
+    display: flex; gap: 12px; align-items: center;
+  }
+
+  .result-secondary-actions {
+    padding: 0 28px 20px;
+    display: flex; gap: 8px; align-items: center;
+  }
+
+  .trakt-result-row { display: flex; align-items: center; gap: 12px; }
+  .trakt-rating { font-size: 14px; color: var(--accent); font-weight: 500; }
+  .trakt-votes { font-size: 11px; color: var(--text-muted); }
+  .trakt-loading { font-size: 11px; color: var(--text-dim); font-style: italic; }
+
+  .loading-bar { display: none; height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; margin-bottom: 16px; }
+  .loading-bar.active { display: block; }
+  .loading-bar-fill { height: 100%; background: var(--accent); width: 0%; animation: loadingPulse 2s ease-in-out infinite; }
+
+  @keyframes loadingPulse {
+    0% { width: 0%; margin-left: 0%; }
+    50% { width: 60%; margin-left: 20%; }
+    100% { width: 0%; margin-left: 100%; }
+  }
+
+  .status-text { font-size: 11px; color: var(--text-muted); text-align: center; letter-spacing: 1px; min-height: 20px; margin-bottom: 12px; }
+
+  .error-msg {
+    font-size: 12px; color: var(--danger);
+    padding: 12px; border: 1px solid rgba(192,57,43,0.3);
+    border-radius: 2px; margin-bottom: 16px; display: none;
+  }
+
+  .history-count { font-size: 10px; color: var(--text-muted); text-align: right; margin-top: 6px; }
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  .collapsible-header {
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer; user-select: none;
+  }
+
+  .collapsible-header:hover .toggle-icon { color: var(--accent); }
+  .toggle-icon { font-size: 18px; color: var(--text-muted); transition: transform 0.2s; }
+  .toggle-icon.open { transform: rotate(45deg); }
+  .collapsible-body { display: none; margin-top: 16px; }
+  .collapsible-body.open { display: block; }
+
+  .cred-saved { font-size: 10px; color: var(--success); margin-top: 4px; display: none; }
+
+  .mode-toggle {
+    display: flex; gap: 0; margin-bottom: 24px;
+    border: 1px solid var(--border); border-radius: 2px; overflow: hidden;
+  }
+
+  .mode-btn {
+    flex: 1; padding: 12px 8px;
+    background: transparent; border: none;
+    border-right: 1px solid var(--border);
+    color: var(--text-muted); font-family: 'DM Mono', monospace;
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.15s;
+  }
+
+  .mode-btn:last-child { border-right: none; }
+  .mode-btn:hover { background: var(--surface2); color: var(--text); }
+  .mode-btn.active { background: rgba(232,197,71,0.08); color: var(--accent); }
+
+  .instr-link { color: var(--accent); text-decoration: underline; text-decoration-color: rgba(232,197,71,0.4); cursor: pointer; }
+  .instr-link:hover { text-decoration-color: var(--accent); }
+
+  .copy-uri {
+    color: var(--accent); cursor: pointer;
+    border-bottom: 1px dashed rgba(232,197,71,0.4); transition: border-color 0.15s;
+  }
+
+  .copy-uri:hover { border-bottom-color: var(--accent); }
+
+  .history-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+
+  .history-item:last-child { border-bottom: none; }
+  .history-mode { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); width: 32px; flex-shrink: 0; }
+  .history-title { flex: 1; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history-year { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+  .history-date { font-size: 10px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; }
+  .history-watchlist { font-size: 9px; letter-spacing: 1px; color: var(--success); margin-left: 4px; }
+
+  footer { text-align: center; margin-top: 40px; font-size: 10px; color: var(--text-dim); letter-spacing: 2px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo">Cur<span>ator</span></div>
+    <div class="tagline" id="tagline">Personalized documentary recommendations</div>
+  </header>
+
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="documentaries" onclick="setMode(this)">Documentaries</button>
+    <button class="mode-btn" data-mode="movies" onclick="setMode(this)">Movies</button>
+    <button class="mode-btn" data-mode="shows" onclick="setMode(this)">Shows</button>
+  </div>
+
+  <!-- Setup Panel -->
+  <div class="panel" id="setupPanel">
+    <div class="collapsible-header" onclick="toggleCollapse(this)" id="setupHeader">
+      <div class="panel-label" style="margin-bottom:0">Configuration</div>
+      <div class="toggle-icon">+</div>
+    </div>
+    <div class="collapsible-body open" id="setupBody">
+
+      <div class="setup-grid">
+        <div class="field-group full">
+          <label>Anthropic API Key</label>
+          <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
+          <div style="display:flex;justify-content:flex-end;margin-top:6px">
+            <button class="btn-small" onclick="saveApiKey()">Save Key</button>
+          </div>
+          <div class="cred-saved" id="apiKeySaved">✓ Saved to browser</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="panel-label">Trakt Watch History</div>
+
+      <div id="traktSetup">
+        <div id="traktCredsForm">
+          <div class="setup-grid">
+            <div class="field-group">
+              <label>Trakt Client ID</label>
+              <input type="password" id="traktClientId" placeholder="Client ID" autocomplete="off" />
+            </div>
+            <div class="field-group">
+              <label>Trakt Client Secret</label>
+              <input type="password" id="traktClientSecret" placeholder="Client Secret" autocomplete="off" />
+            </div>
+          </div>
+          <div style="margin-bottom:12px">
+            <div style="font-size:11px;color:var(--text-muted);line-height:1.7">
+              Register a free app at <a href="https://trakt.tv/oauth/applications" target="_blank" class="instr-link">trakt.tv/oauth/applications</a>
+              — set Redirect URI to <span class="copy-uri" onclick="copyRedirectUri(this)" title="Click to copy" id="redirectUriSpan">loading...</span>
+            </div>
+          </div>
+          <div class="trakt-btn-row">
+            <button class="btn-small" onclick="saveTraktCreds()">Save &amp; Connect Trakt</button>
+          </div>
+          <div class="cred-saved" id="traktCredsSaved">✓ Credentials saved</div>
+        </div>
+
+        <div id="traktAuthSection" style="display:none">
+          <div class="trakt-status">
+            <div class="trakt-dot" id="traktDot"></div>
+            <div class="trakt-status-text">
+              <strong id="traktStatusTitle">Not connected</strong>
+              <span id="traktStatusSub">Click below to authorize with your Trakt account</span>
+            </div>
+          </div>
+          <div class="trakt-btn-row">
+            <button class="btn-small" id="traktConnectBtn" onclick="connectTrakt()">Connect Trakt →</button>
+            <button class="btn-small" id="traktDisconnectBtn" onclick="disconnectTrakt()" style="display:none">Disconnect</button>
+            <button class="btn-small" onclick="resetTraktCreds()" style="color:var(--text-dim)">Change Credentials</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="collapsible-header" onclick="toggleCollapse(this)">
+        <div class="panel-label" style="margin-bottom:0">CSV Fallback <span style="color:var(--text-dim);font-size:10px;margin-left:8px">— if Trakt isn't connected</span></div>
+        <div class="toggle-icon">+</div>
+      </div>
+      <div class="collapsible-body">
+        <div class="file-drop" id="fileDrop">
+          <input type="file" id="csvFile" accept=".csv" />
+          <div class="file-drop-text">
+            <strong>Drop your Trakt CSV here</strong>
+            or click to browse — export from trakt.tv → Settings → Data
+          </div>
+        </div>
+        <div class="file-status" id="fileStatus"></div>
+        <div class="history-count" id="historyCount"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mood Panel -->
+  <div class="panel">
+    <div class="collapsible-header" onclick="toggleCollapse(this)">
+      <div class="panel-label" style="margin-bottom:0">Mood Filter <span style="color:var(--text-dim);font-size:10px;margin-left:8px">— optional</span></div>
+      <div class="toggle-icon">+</div>
+    </div>
+    <div class="collapsible-body">
+      <div class="mood-chips" style="margin-bottom:12px">
+        <button class="chip" id="englishAudioBtn" onclick="toggleEnglishAudio()">English Audio Only</button>
+      </div>
+      <div class="mood-chips" id="moodChips">
+        <button class="chip" onclick="toggleChip(this)">Dark &amp; Heavy</button>
+        <button class="chip" onclick="toggleChip(this)">Corporate Corruption</button>
+        <button class="chip" onclick="toggleChip(this)">Crime &amp; Justice</button>
+        <button class="chip" onclick="toggleChip(this)">Cults &amp; Extremism</button>
+        <button class="chip" onclick="toggleChip(this)">Politics &amp; Power</button>
+        <button class="chip" onclick="toggleChip(this)">War &amp; History</button>
+        <button class="chip" onclick="toggleChip(this)">Music</button>
+        <button class="chip" onclick="toggleChip(this)">Science &amp; Medicine</button>
+        <button class="chip" onclick="toggleChip(this)">Lighter Today</button>
+        <button class="chip" onclick="toggleChip(this)">Deep Cut / Obscure</button>
+        <button class="chip" onclick="toggleChip(this)">Character Study</button>
+        <button class="chip" onclick="toggleChip(this)">Surprising / Weird</button>
+      </div>
+      <div style="margin-top:16px">
+        <label>Or describe your mood</label>
+        <textarea id="customMood" placeholder="e.g. something about systemic failure, or a compelling villain..." style="margin-top:6px;height:60px;"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+  <div class="loading-bar" id="loadingBar"><div class="loading-bar-fill"></div></div>
+  <div class="status-text" id="statusText"></div>
+
+  <!-- Result Card -->
+  <div class="result-card" id="resultCard">
+    <div class="result-header">
+      <div class="result-year" id="resYear"></div>
+      <div class="result-title" id="resTitle"></div>
+      <div class="result-meta" id="resMeta"></div>
+    </div>
+    <div class="result-body">
+      <div class="result-section">
+        <div class="result-section-label">Synopsis</div>
+        <div class="result-text" id="resSynopsis"></div>
+      </div>
+      <div class="result-section">
+        <div class="result-section-label">Why this for you</div>
+        <div class="result-why" id="resWhy"></div>
+      </div>
+      <div class="result-section">
+        <div class="result-section-label">Trakt</div>
+        <div id="resTraktSection"><span style="color:var(--text-dim);font-size:11px">—</span></div>
+      </div>
+    </div>
+    <div class="result-actions">
+      <button class="btn-primary" id="nextPickBtn" style="flex:1" onclick="getRecommendation()">Next Documentary →</button>
+      <button class="btn-secondary" onclick="moreLikeThis()">More Like This</button>
+    </div>
+    <div class="result-secondary-actions">
+      <button class="btn-small" id="watchlistBtn" onclick="addToWatchlist()">+ Watchlist</button>
+      <button class="btn-small" onclick="markSeen()">Mark Seen</button>
+      <div style="flex:1"></div>
+      <button class="btn-small" id="likeBtn" onclick="setFeedback('liked')" title="Good call">👍</button>
+      <button class="btn-small" id="dislikeBtn" onclick="setFeedback('disliked')" title="Not for me">👎</button>
+    </div>
+  </div>
+
+  <button class="btn-primary" id="mainBtn" onclick="getRecommendation()">
+    ▶ &nbsp; Pick a Documentary
+  </button>
+
+  <div class="panel" id="historyPanel" style="display:none; margin-top:16px">
+    <div class="collapsible-header" onclick="toggleCollapse(this)">
+      <div class="panel-label" style="margin-bottom:0">History</div>
+      <div class="toggle-icon">+</div>
+    </div>
+    <div class="collapsible-body open" id="historyList"></div>
+  </div>
+
+  <footer>Curator · Powered by Claude · Your data stays in your browser</footer>
+</div>
+
+<script>
+// ── Storage (localStorage replaces Electron keychain + JSON files) ─────────────
+const store = {
+  get: (k) => localStorage.getItem('curator_' + k),
+  set: (k, v) => localStorage.setItem('curator_' + k, v),
+  remove: (k) => localStorage.removeItem('curator_' + k),
+  getJSON: (k, fb = []) => { try { return JSON.parse(localStorage.getItem('curator_' + k)) ?? fb; } catch { return fb; } },
+  setJSON: (k, v) => localStorage.setItem('curator_' + k, JSON.stringify(v)),
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let watchedMovieTitles = new Set();
+let watchedShowTitles = new Set();
+let seenThisSession = new Set();
+let traktConnected = false;
+let lastRec = null;
+let moreLikeSeed = null;
+let currentMode = 'documentaries';
+let preferEnglishAudio = false;
+
+// ── Mode Toggle ───────────────────────────────────────────────────────────────
+const taglines = {
+  documentaries: 'Personalized documentary recommendations',
+  movies: 'Personalized movie recommendations',
+  shows: 'Personalized TV show recommendations',
+};
+const mainBtnLabels = {
+  documentaries: '▶  Pick a Documentary',
+  movies: '▶  Pick a Movie',
+  shows: '▶  Pick a Show',
+};
+const nextLabels = {
+  documentaries: 'Next Documentary →',
+  movies: 'Next Movie →',
+  shows: 'Next Show →',
+};
+
+function setMode(btn) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentMode = btn.dataset.mode;
+  moreLikeSeed = null;
+  document.getElementById('tagline').textContent = taglines[currentMode];
+  const mainBtn = document.getElementById('mainBtn');
+  if (!mainBtn.disabled) mainBtn.textContent = mainBtnLabels[currentMode];
+  document.getElementById('resultCard').style.display = 'none';
+  seenThisSession.clear();
+  setStatus('');
+  showError('');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  // Set redirect URI display
+  const redirectUri = window.location.origin + window.location.pathname.replace(/\/$/, '');
+  const span = document.getElementById('redirectUriSpan');
+  span.textContent = redirectUri;
+
+  // Load saved credentials
+  const apiKey = store.get('anthropic');
+  if (apiKey) document.getElementById('apiKey').value = apiKey;
+
+  const clientId = store.get('traktClientId');
+  const clientSecret = store.get('traktClientSecret');
+  const accessToken = store.get('traktAccessToken');
+
+  if (clientId && clientSecret) {
+    showTraktAuthSection();
+    if (accessToken) setTraktConnected(true);
+  }
+
+  if (accessToken) await loadTraktHistory();
+
+  if (apiKey && accessToken) collapseSetup();
+
+  renderHistory();
+
+  // Handle Trakt OAuth callback (code in URL)
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (code) {
+    window.history.replaceState({}, '', window.location.pathname);
+    setStatus('Exchanging authorization code...');
+    try {
+      await exchangeTraktCode(code);
+      setTraktConnected(true);
+      await loadTraktHistory();
+      setStatus('');
+      if (store.get('anthropic')) collapseSetup();
+    } catch (err) {
+      showError('Trakt auth failed: ' + err.message);
+      setStatus('');
+    }
+  }
+}
+
+function collapseSetup() {
+  const body = document.getElementById('setupBody');
+  const icon = document.querySelector('#setupHeader .toggle-icon');
+  body.classList.remove('open');
+  icon.classList.remove('open');
+  document.querySelector('#setupHeader .panel-label').textContent = 'Configuration  ✓';
+}
+
+// ── Credentials ───────────────────────────────────────────────────────────────
+function saveApiKey() {
+  const val = document.getElementById('apiKey').value.trim();
+  if (!val) return;
+  store.set('anthropic', val);
+  const el = document.getElementById('apiKeySaved');
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
+  if (store.get('traktAccessToken')) collapseSetup();
+}
+
+function saveTraktCreds() {
+  const clientId = document.getElementById('traktClientId').value.trim();
+  const clientSecret = document.getElementById('traktClientSecret').value.trim();
+  if (!clientId || !clientSecret) { showError('Enter both Trakt Client ID and Client Secret.'); return; }
+  store.set('traktClientId', clientId);
+  store.set('traktClientSecret', clientSecret);
+  const el = document.getElementById('traktCredsSaved');
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 2000);
+  showTraktAuthSection();
+}
+
+function showTraktAuthSection() {
+  document.getElementById('traktCredsForm').style.display = 'none';
+  document.getElementById('traktAuthSection').style.display = 'block';
+}
+
+function resetTraktCreds() {
+  store.remove('traktClientId');
+  store.remove('traktClientSecret');
+  document.getElementById('traktCredsForm').style.display = 'block';
+  document.getElementById('traktAuthSection').style.display = 'none';
+  document.getElementById('traktClientId').value = '';
+  document.getElementById('traktClientSecret').value = '';
+}
+
+function setTraktConnected(connected) {
+  traktConnected = connected;
+  const dot = document.getElementById('traktDot');
+  const title = document.getElementById('traktStatusTitle');
+  const sub = document.getElementById('traktStatusSub');
+  document.getElementById('traktConnectBtn').style.display = connected ? 'none' : 'inline-block';
+  document.getElementById('traktDisconnectBtn').style.display = connected ? 'inline-block' : 'none';
+  if (connected) {
+    dot.className = 'trakt-dot connected';
+    title.textContent = 'Connected';
+    sub.textContent = 'Watch history loaded — Claude will avoid your seen titles';
+  } else {
+    dot.className = 'trakt-dot';
+    title.textContent = 'Not connected';
+    sub.textContent = 'Click below to authorize with your Trakt account';
+  }
+}
+
+// ── Trakt OAuth (web redirect flow) ──────────────────────────────────────────
+function connectTrakt() {
+  const clientId = store.get('traktClientId');
+  if (!clientId) { showError('Save your Trakt credentials first.'); return; }
+  const redirectUri = window.location.origin + window.location.pathname.replace(/\/$/, '');
+  window.location.href = `https://trakt.tv/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+}
+
+async function exchangeTraktCode(code) {
+  const clientId = store.get('traktClientId');
+  const clientSecret = store.get('traktClientSecret');
+  const redirectUri = window.location.origin + window.location.pathname.replace(/\/$/, '');
+  const res = await fetch('https://api.trakt.tv/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' }),
+  });
+  if (!res.ok) throw new Error('Token exchange failed');
+  const data = await res.json();
+  store.set('traktAccessToken', data.access_token);
+  store.set('traktRefreshToken', data.refresh_token);
+}
+
+async function refreshTraktToken() {
+  const clientId = store.get('traktClientId');
+  const clientSecret = store.get('traktClientSecret');
+  const refreshToken = store.get('traktRefreshToken');
+  const redirectUri = window.location.origin + window.location.pathname.replace(/\/$/, '');
+  if (!refreshToken) throw new Error('Trakt token expired — please reconnect');
+  const res = await fetch('https://api.trakt.tv/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'refresh_token' }),
+  });
+  if (!res.ok) throw new Error('Trakt token expired — please reconnect');
+  const data = await res.json();
+  store.set('traktAccessToken', data.access_token);
+  store.set('traktRefreshToken', data.refresh_token);
+  return data.access_token;
+}
+
+async function disconnectTrakt() {
+  store.remove('traktAccessToken');
+  store.remove('traktRefreshToken');
+  setTraktConnected(false);
+  watchedMovieTitles.clear();
+  watchedShowTitles.clear();
+  document.getElementById('historyCount').textContent = '';
+}
+
+// ── Trakt API helper ──────────────────────────────────────────────────────────
+async function traktFetch(path, options = {}) {
+  let token = store.get('traktAccessToken');
+  const clientId = store.get('traktClientId');
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'trakt-api-version': '2',
+    'trakt-api-key': clientId,
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  let res = await fetch('https://api.trakt.tv' + path, { ...options, headers });
+  if (res.status === 401) {
+    token = await refreshTraktToken();
+    headers['Authorization'] = `Bearer ${token}`;
+    res = await fetch('https://api.trakt.tv' + path, { ...options, headers });
+  }
+  return res;
+}
+
+async function loadTraktHistory() {
+  setStatus('Fetching your Trakt watch history...');
+  try {
+    const fetchAll = async (path) => {
+      const items = [];
+      let page = 1;
+      while (true) {
+        const res = await traktFetch(`${path}?page=${page}&limit=100`);
+        if (!res.ok) throw new Error('Trakt API error: ' + res.status);
+        const data = await res.json();
+        if (!data.length) break;
+        items.push(...data);
+        if (data.length < 100) break;
+        page++;
+      }
+      return items;
+    };
+    const [movies, shows] = await Promise.all([
+      fetchAll('/users/me/watched/movies'),
+      fetchAll('/users/me/watched/shows'),
+    ]);
+    const movieTitles = movies.map(i => i.movie?.title).filter(Boolean);
+    const showTitles = shows.map(i => i.show?.title).filter(Boolean);
+    watchedMovieTitles = new Set(movieTitles.map(t => t.toLowerCase()));
+    watchedShowTitles = new Set(showTitles.map(t => t.toLowerCase()));
+    document.getElementById('historyCount').textContent =
+      `✓ ${movieTitles.length} movies + ${showTitles.length} shows loaded from Trakt`;
+    setStatus('');
+    return true;
+  } catch (err) {
+    if (err.message.includes('expired')) { setTraktConnected(false); showError('Trakt session expired. Please reconnect.'); }
+    else showError('Could not load Trakt history: ' + err.message);
+    setStatus('');
+    return false;
+  }
+}
+
+// ── CSV Fallback ──────────────────────────────────────────────────────────────
+document.getElementById('csvFile').addEventListener('change', e => handleFile(e.target.files[0]));
+const fileDrop = document.getElementById('fileDrop');
+fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('drag-over'); });
+fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('drag-over'));
+fileDrop.addEventListener('drop', e => { e.preventDefault(); fileDrop.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+
+function handleFile(file) {
+  if (!file || !file.name.endsWith('.csv')) return;
+  const reader = new FileReader();
+  reader.onload = e => parseCSV(e.target.result);
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  const lines = text.split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  const titleIdx = headers.indexOf('title');
+  const genreIdx = headers.indexOf('genres');
+  const typeIdx = headers.indexOf('type');
+  let docCount = 0;
+  watchedMovieTitles.clear();
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCSVRow(lines[i]);
+    if (!row || row.length < 3) continue;
+    const type = row[typeIdx]?.toLowerCase();
+    const genre = row[genreIdx]?.toLowerCase() || '';
+    const title = row[titleIdx]?.trim();
+    if (title) watchedMovieTitles.add(title.toLowerCase());
+    if (type === 'movie' && genre.includes('documentary')) docCount++;
+  }
+  const status = document.getElementById('fileStatus');
+  status.textContent = `✓ Loaded — ${watchedMovieTitles.size} titles, ~${docCount} documentaries`;
+  status.style.display = 'block';
+  document.getElementById('historyCount').textContent = 'Claude will avoid recommending anything in your history';
+}
+
+function parseCSVRow(row) {
+  const result = []; let current = ''; let inQuotes = false;
+  for (let i = 0; i < row.length; i++) {
+    if (row[i] === '"') { inQuotes = !inQuotes; continue; }
+    if (row[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; continue; }
+    current += row[i];
+  }
+  result.push(current.trim());
+  return result;
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function toggleChip(el) { el.classList.toggle('active'); }
+
+function toggleCollapse(header) {
+  const icon = header.querySelector('.toggle-icon');
+  const body = header.nextElementSibling;
+  icon.classList.toggle('open');
+  body.classList.toggle('open');
+}
+
+function getActiveMoods() {
+  const active = [...document.querySelectorAll('.chip.active')]
+    .filter(c => c.id !== 'englishAudioBtn')
+    .map(c => c.textContent);
+  const custom = document.getElementById('customMood').value.trim();
+  return { chips: active, custom };
+}
+
+function setLoading(loading) {
+  document.getElementById('loadingBar').classList.toggle('active', loading);
+  const btn = document.getElementById('mainBtn');
+  btn.disabled = loading;
+  btn.textContent = loading ? '⟳  Thinking...' : mainBtnLabels[currentMode];
+}
+
+function setStatus(msg) { document.getElementById('statusText').textContent = msg; }
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function toggleEnglishAudio() {
+  preferEnglishAudio = !preferEnglishAudio;
+  document.getElementById('englishAudioBtn').classList.toggle('active', preferEnglishAudio);
+}
+
+// ── Claude API (direct browser call) ─────────────────────────────────────────
+async function callClaude(prompt, apiKey) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content[0].text.trim();
+}
+
+// ── Prompts ───────────────────────────────────────────────────────────────────
+function buildPrompt(mode, watchedList, seenList, moodText, seed, likedTitles, englishAudio) {
+  const avoidBlock = watchedList
+    ? `Their watch history includes these titles (do NOT recommend any of these):\n${watchedList}\n`
+    : '(No watch history provided — treat as a blank slate)\n';
+  const seenBlock = seenList ? `Also do NOT recommend these (already suggested this session): ${seenList}\n` : '';
+  const seedBlock = seed ? `\nThe user wants something similar to: ${seed.title} (${seed.year}). Prioritize similar themes, tone, or subject matter.\n` : '';
+  const likedBlock = likedTitles?.length ? `\nTitles this user has responded positively to: ${likedTitles.join(', ')} — use these as taste signals.\n` : '';
+  const audioBlock = englishAudio ? `\nIMPORTANT: Only recommend titles where English audio is available. Do not recommend foreign-language titles that lack English audio.\n` : '';
+
+  const jsonFormat = mode === 'shows'
+    ? `{\n  "title": "Show Title",\n  "year": "2019",\n  "runtime": "6 seasons / 8 episodes",\n  "genres": ["Crime", "Drama"],\n  "synopsis": "2-3 sentence synopsis.",\n  "why": "1-2 sentences on why this viewer will love it."\n}`
+    : `{\n  "title": "Film Title",\n  "year": "2019",\n  "runtime": "94 min",\n  "genres": ["Crime", "Politics"],\n  "synopsis": "2-3 sentence synopsis.",\n  "why": "1-2 sentences on why this viewer will love it."\n}`;
+
+  const profiles = {
+    documentaries: `You are a documentary recommendation engine for a very experienced viewer who has seen over 1,000 documentaries.\n\n${avoidBlock}\n${seenBlock}\n${seedBlock}\n${likedBlock}\n${audioBlock}\n${moodText}\n\nTaste profile:\n- Loves: crime/justice, corporate corruption, cults/extremism, politics/power, character studies\n- Appreciates deep cuts, not just mainstream hits\n- Values intellectual rigor and systemic truth\n- Dislikes celebrity biopics unless exceptional\n- Has seen most award-winning docs, so go deeper\n\nRecommend ONE documentary. Respond ONLY in this exact JSON format:\n${jsonFormat}`,
+    movies: `You are a film recommendation engine for an experienced cinephile.\n\n${avoidBlock}\n${seenBlock}\n${seedBlock}\n${likedBlock}\n${audioBlock}\n${moodText}\n\nTaste profile:\n- Drawn to complex narratives and morally ambiguous characters\n- Appreciates both mainstream hits and underseen gems\n- Open to any era or country\n- Enjoys thrillers, crime, drama, dark comedy, prestige films\n\nRecommend ONE movie (not documentary). Respond ONLY in this exact JSON format:\n${jsonFormat}`,
+    shows: `You are a TV show recommendation engine for an experienced viewer.\n\n${avoidBlock}\n${seenBlock}\n${seedBlock}\n${likedBlock}\n${audioBlock}\n${moodText}\n\nTaste profile:\n- Loves prestige drama, crime, limited series, smart genre TV\n- Values tight writing and strong performances over spectacle\n- Open to any era or country\n- Not interested in reality TV or pure procedurals\n\nRecommend ONE TV show or limited series. Respond ONLY in this exact JSON format:\n${jsonFormat}`,
+  };
+  return profiles[mode];
+}
+
+// ── Recommendation ────────────────────────────────────────────────────────────
+async function getRecommendation() {
+  const apiKey = document.getElementById('apiKey').value.trim() || store.get('anthropic');
+  if (!apiKey) { showError('Please enter your Anthropic API key.'); return; }
+  if (apiKey !== store.get('anthropic')) store.set('anthropic', apiKey);
+
+  showError('');
+  setLoading(true);
+  const seedToUse = moreLikeSeed;
+  moreLikeSeed = null;
+  setStatus(seedToUse ? `Finding something like "${seedToUse.title}"...` : 'Consulting your watch history...');
+
+  const { chips, custom } = getActiveMoods();
+  const moodText = chips.length || custom
+    ? `Mood filters: ${chips.join(', ')}${custom ? '. Additional context: ' + custom : ''}`
+    : 'No specific mood — just pick something great.';
+
+  const relevantTitles = currentMode === 'shows' ? watchedShowTitles : watchedMovieTitles;
+  const watchedList = [...relevantTitles].slice(0, 800).join(', ');
+  const seenList = [...seenThisSession].join(', ');
+
+  const history = store.getJSON('history', []);
+  const likedTitles = history
+    .filter(e => e.feedback === 'liked' && e.mode === currentMode)
+    .slice(0, 5)
+    .map(e => e.title);
+
+  const prompt = buildPrompt(currentMode, watchedList, seenList, moodText, seedToUse, likedTitles, preferEnglishAudio);
+
+  try {
+    const text = await callClaude(prompt, apiKey);
+    const rec = JSON.parse(text.replace(/```json|```/g, '').trim());
+    const timestamp = new Date().toISOString();
+    lastRec = { ...rec, timestamp };
+    seenThisSession.add(rec.title.toLowerCase());
+    displayResult(rec);
+    setLoading(false);
+    setStatus('');
+
+    // Save to history
+    const h = store.getJSON('history', []);
+    h.unshift({ ...rec, mode: currentMode, timestamp, feedback: null, addedToWatchlist: false });
+    if (h.length > 500) h.splice(500);
+    store.setJSON('history', h);
+    renderHistory();
+
+    lookupTrakt(rec.title);
+  } catch (err) {
+    setLoading(false);
+    setStatus('');
+    showError('Error: ' + err.message);
+  }
+}
+
+function displayResult(rec) {
+  document.getElementById('resYear').textContent = rec.year;
+  document.getElementById('resTitle').textContent = rec.title;
+  document.getElementById('resSynopsis').textContent = rec.synopsis;
+  document.getElementById('resWhy').textContent = rec.why;
+
+  const meta = document.getElementById('resMeta');
+  meta.innerHTML = '';
+  if (rec.runtime) meta.innerHTML += `<span class="meta-tag">${rec.runtime}</span>`;
+  (rec.genres || []).forEach(g => meta.innerHTML += `<span class="meta-tag">${g}</span>`);
+
+  document.getElementById('nextPickBtn').textContent = nextLabels[currentMode];
+
+  const wlBtn = document.getElementById('watchlistBtn');
+  wlBtn.style.display = traktConnected ? 'inline-block' : 'none';
+  wlBtn.textContent = '+ Watchlist';
+  wlBtn.disabled = false;
+  wlBtn.style.color = '';
+  wlBtn.style.borderColor = '';
+  document.getElementById('likeBtn').style.color = '';
+  document.getElementById('likeBtn').style.borderColor = '';
+  document.getElementById('dislikeBtn').style.color = '';
+  document.getElementById('dislikeBtn').style.borderColor = '';
+
+  document.getElementById('resTraktSection').innerHTML = traktConnected
+    ? '<span class="trakt-loading">Looking up on Trakt...</span>'
+    : '<span style="color:var(--text-dim);font-size:11px">Connect Trakt to see rating</span>';
+
+  const card = document.getElementById('resultCard');
+  card.style.display = 'block';
+  card.style.animation = 'none';
+  card.offsetHeight;
+  card.style.animation = 'fadeUp 0.4s ease forwards';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ── Trakt lookup ──────────────────────────────────────────────────────────────
+async function lookupTrakt(title) {
+  if (!traktConnected) return;
+  try {
+    const searchType = currentMode === 'shows' ? 'show' : 'movie';
+    const res = await traktFetch(`/search/${searchType}?query=${encodeURIComponent(title)}&limit=3`);
+    if (!res.ok) { document.getElementById('resTraktSection').innerHTML = '<span style="color:var(--text-dim);font-size:11px">Not found on Trakt</span>'; return; }
+    const results = await res.json();
+    if (!results.length) { document.getElementById('resTraktSection').innerHTML = '<span style="color:var(--text-dim);font-size:11px">Not found on Trakt</span>'; return; }
+
+    const titleLower = title.toLowerCase();
+    const match = results.find(r => (r.movie || r.show)?.title?.toLowerCase() === titleLower) || results[0];
+    const media = match.movie || match.show;
+
+    if (lastRec) lastRec.traktData = { traktId: media.ids?.trakt, slug: media.ids?.slug, rating: media.rating ? parseFloat(media.rating.toFixed(1)) : null, votes: media.votes || 0 };
+
+    const ratingHtml = media.rating
+      ? `<span class="trakt-rating">★ ${parseFloat(media.rating.toFixed(1))}/10</span><span class="trakt-votes">(${(media.votes || 0).toLocaleString()} votes)</span>`
+      : '<span style="color:var(--text-dim);font-size:11px">No rating yet</span>';
+
+    const slug = media.ids?.slug;
+    const linkHtml = slug
+      ? `<button class="btn-small" style="margin-left:auto" onclick="window.open('https://trakt.tv/${currentMode === 'shows' ? 'shows' : 'movies'}/${slug}', '_blank')">View on Trakt →</button>`
+      : '';
+
+    document.getElementById('resTraktSection').innerHTML = `<div class="trakt-result-row">${ratingHtml}${linkHtml}</div>`;
+  } catch (e) {
+    document.getElementById('resTraktSection').innerHTML = '<span style="color:var(--text-dim);font-size:11px">Trakt lookup failed</span>';
+  }
+}
+
+// ── More Like This ────────────────────────────────────────────────────────────
+function moreLikeThis() {
+  if (!lastRec) return;
+  moreLikeSeed = { title: lastRec.title, year: lastRec.year };
+  getRecommendation();
+}
+
+// ── Add to Trakt Watchlist ────────────────────────────────────────────────────
+async function addToWatchlist() {
+  if (!lastRec) return;
+  const btn = document.getElementById('watchlistBtn');
+  btn.disabled = true;
+  btn.textContent = 'Adding...';
+  try {
+    const isShow = currentMode === 'shows';
+    const listKey = isShow ? 'shows' : 'movies';
+    const itemKey = isShow ? 'show' : 'movie';
+    const ids = lastRec.traktData?.traktId ? { trakt: lastRec.traktData.traktId } : {};
+    const res = await traktFetch('/sync/watchlist', {
+      method: 'POST',
+      body: JSON.stringify({ [listKey]: [{ [itemKey]: { ids, title: lastRec.title, year: parseInt(lastRec.year) || undefined } }] }),
+    });
+    if (!res.ok) throw new Error('status ' + res.status);
+    btn.textContent = '✓ Watchlisted';
+    btn.style.color = 'var(--success)';
+    btn.style.borderColor = 'var(--success)';
+    updateHistory(lastRec.timestamp, { addedToWatchlist: true });
+    renderHistory();
+  } catch (e) {
+    btn.textContent = '+ Watchlist';
+    btn.disabled = false;
+    showError('Watchlist error: ' + e.message);
+  }
+}
+
+// ── Feedback ──────────────────────────────────────────────────────────────────
+function setFeedback(type) {
+  if (!lastRec?.timestamp) return;
+  const likeBtn = document.getElementById('likeBtn');
+  const dislikeBtn = document.getElementById('dislikeBtn');
+  if (type === 'liked') {
+    likeBtn.style.color = 'var(--accent)'; likeBtn.style.borderColor = 'var(--accent)';
+    dislikeBtn.style.color = ''; dislikeBtn.style.borderColor = '';
+  } else {
+    dislikeBtn.style.color = 'var(--danger)'; dislikeBtn.style.borderColor = 'var(--danger)';
+    likeBtn.style.color = ''; likeBtn.style.borderColor = '';
+  }
+  updateHistory(lastRec.timestamp, { feedback: type });
+}
+
+// ── Mark Seen ─────────────────────────────────────────────────────────────────
+async function markSeen() {
+  if (!lastRec) return;
+  seenThisSession.add(lastRec.title.toLowerCase());
+  if (currentMode === 'shows') watchedShowTitles.add(lastRec.title.toLowerCase());
+  else watchedMovieTitles.add(lastRec.title.toLowerCase());
+  document.getElementById('resultCard').style.display = 'none';
+  setStatus(`Marked "${lastRec.title}" as seen.`);
+
+  if (traktConnected) {
+    try {
+      const isShow = currentMode === 'shows';
+      const listKey = isShow ? 'shows' : 'movies';
+      const itemKey = isShow ? 'show' : 'movie';
+      const ids = lastRec.traktData?.traktId ? { trakt: lastRec.traktData.traktId } : {};
+      await traktFetch('/sync/history', {
+        method: 'POST',
+        body: JSON.stringify({ [listKey]: [{ [itemKey]: { ids, title: lastRec.title, year: parseInt(lastRec.year) || undefined }, watched_at: new Date().toISOString() }] }),
+      });
+      setStatus(`Marked "${lastRec.title}" as seen and synced to Trakt.`);
+    } catch (e) {
+      setStatus(`Marked "${lastRec.title}" as seen (Trakt sync failed).`);
+    }
+  }
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+function updateHistory(timestamp, updates) {
+  const h = store.getJSON('history', []);
+  const entry = h.find(e => e.timestamp === timestamp);
+  if (entry) Object.assign(entry, updates);
+  store.setJSON('history', h);
+}
+
+function renderHistory() {
+  const history = store.getJSON('history', []);
+  const panel = document.getElementById('historyPanel');
+  if (!history.length) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  const modeShortMap = { documentaries: 'doc', movies: 'film', shows: 'show' };
+  document.getElementById('historyList').innerHTML = history.slice(0, 30).map(entry => {
+    const date = new Date(entry.timestamp);
+    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const modeShort = modeShortMap[entry.mode] || entry.mode;
+    const feedbackIcon = entry.feedback === 'liked' ? ' 👍' : entry.feedback === 'disliked' ? ' 👎' : '';
+    const watchlistBadge = entry.addedToWatchlist ? ' <span class="history-watchlist">✓ list</span>' : '';
+    return `<div class="history-item">
+      <span class="history-mode">${modeShort}</span>
+      <span class="history-title">${entry.title}${feedbackIcon}</span>
+      <span class="history-year">${entry.year}</span>
+      <span class="history-date">${dateStr}${watchlistBadge}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function copyRedirectUri(el) {
+  const uri = window.location.origin + window.location.pathname.replace(/\/$/, '');
+  navigator.clipboard.writeText(uri).then(() => {
+    const orig = el.textContent;
+    el.textContent = 'Copied!';
+    setTimeout(() => { el.textContent = uri; }, 1500);
+  });
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+init().catch(console.error);
+</script>
+</body>
+</html>
