@@ -675,8 +675,8 @@ async function getRecommendation() {
     api.addHistory({ ...rec, mode: currentMode, timestamp, feedback: null, addedToWatchlist: false }).catch(() => {});
     renderHistory().catch(() => {});
 
-    // Trakt lookup (async — updates card when done, skip for music)
-    if (currentMode !== 'music') lookupTrakt(rec.title);
+    if (currentMode === 'music') lookupSpotifyArt(rec.title, rec.artist);
+    else lookupTrakt(rec.title);
   } catch (err) {
     setLoading(false);
     setStatus('');
@@ -686,6 +686,11 @@ async function getRecommendation() {
 
 function displayResult(rec) {
   const isMusic = currentMode === 'music';
+
+  // Reset album art
+  const artImg = document.getElementById('resAlbumArt');
+  artImg.style.display = 'none';
+  artImg.src = '';
 
   document.getElementById('resYear').textContent = rec.year;
 
@@ -947,6 +952,18 @@ function searchSpotify() {
     ? `${lastRec.artist} ${lastRec.title}`
     : lastRec.title;
   api.openExternal(`spotify:search:${encodeURIComponent(query)}`);
+}
+
+async function lookupSpotifyArt(title, artist) {
+  if (!spotifyConnected) return;
+  try {
+    const imgUrl = await api.spotifySearchAlbum({ title, artist });
+    if (imgUrl) {
+      const img = document.getElementById('resAlbumArt');
+      img.src = imgUrl;
+      img.style.display = 'block';
+    }
+  } catch (e) { /* non-fatal */ }
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

@@ -232,7 +232,9 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
-  .result-header { padding: 24px 28px 20px; border-bottom: 1px solid var(--border); }
+  .result-header { padding: 24px 28px 20px; border-bottom: 1px solid var(--border); display: flex; gap: 20px; align-items: flex-start; }
+  .result-header-text { flex: 1; min-width: 0; }
+  .result-album-art { width: 120px; height: 120px; object-fit: cover; border-radius: 2px; flex-shrink: 0; display: none; }
   .result-year { font-size: 10px; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
   .result-title { font-family: 'DM Serif Display', serif; font-size: 36px; line-height: 1.1; letter-spacing: -0.5px; color: var(--text); }
   .result-meta { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
@@ -696,10 +698,13 @@
   <!-- Result Card -->
   <div class="result-card" id="resultCard">
     <div class="result-header">
-      <div class="result-year" id="resYear"></div>
-      <div class="result-artist" id="resArtist" style="display:none;font-size:13px;color:var(--text-muted);letter-spacing:1px;margin-bottom:6px;text-transform:uppercase"></div>
-      <div class="result-title" id="resTitle"></div>
-      <div class="result-meta" id="resMeta"></div>
+      <img id="resAlbumArt" class="result-album-art" alt="Album art">
+      <div class="result-header-text">
+        <div class="result-year" id="resYear"></div>
+        <div class="result-artist" id="resArtist" style="display:none;font-size:13px;color:var(--text-muted);letter-spacing:1px;margin-bottom:6px;text-transform:uppercase"></div>
+        <div class="result-title" id="resTitle"></div>
+        <div class="result-meta" id="resMeta"></div>
+      </div>
     </div>
     <div class="result-body">
       <div class="result-section">
@@ -1449,7 +1454,8 @@ async function getRecommendation() {
     store.setJSON('history', h);
     renderHistory();
 
-    if (currentMode !== 'music') lookupTrakt(rec.title);
+    if (currentMode === 'music') lookupSpotifyArt(rec.title, rec.artist);
+    else lookupTrakt(rec.title);
   } catch (err) {
     setLoading(false);
     setStatus('');
@@ -1459,6 +1465,11 @@ async function getRecommendation() {
 
 function displayResult(rec) {
   const isMusic = currentMode === 'music';
+
+  // Reset album art
+  const artImg = document.getElementById('resAlbumArt');
+  artImg.style.display = 'none';
+  artImg.src = '';
 
   document.getElementById('resYear').textContent = rec.year;
 
@@ -1548,11 +1559,29 @@ function moreLikeThis() {
   getRecommendation();
 }
 
-// ── Spotify search ────────────────────────────────────────────────────────────
+// ── Spotify search + album art ────────────────────────────────────────────────
 function openSpotify() {
   if (!lastRec) return;
   const query = lastRec.artist ? `${lastRec.artist} ${lastRec.title}` : lastRec.title;
   window.open(`https://open.spotify.com/search/${encodeURIComponent(query)}`, '_blank');
+}
+
+async function lookupSpotifyArt(title, artist) {
+  if (!spotifyConnected) return;
+  try {
+    const q = artist ? `album:${title} artist:${artist}` : title;
+    const res = await spotifyFetch(`/v1/search?q=${encodeURIComponent(q)}&type=album&limit=5`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const albums = data.albums?.items || [];
+    const match = albums.find(a => a.name.toLowerCase() === title.toLowerCase()) || albums[0];
+    const imgUrl = match?.images?.[1]?.url || match?.images?.[0]?.url;
+    if (imgUrl) {
+      const img = document.getElementById('resAlbumArt');
+      img.src = imgUrl;
+      img.style.display = 'block';
+    }
+  } catch (e) { /* non-fatal */ }
 }
 
 // ── Add to Trakt Watchlist ────────────────────────────────────────────────────

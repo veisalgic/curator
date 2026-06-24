@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('docpicker', {
   startSpotifyOAuth: () => ipcRenderer.invoke('spotify:start-oauth'),
   exchangeSpotifyCode: (code) => ipcRenderer.invoke('spotify:exchange-code', code),
   fetchSpotifyData: () => ipcRenderer.invoke('spotify:fetch-data'),
+  spotifySearchAlbum: (params) => ipcRenderer.invoke('spotify:search-album', params),
 
   // History
   getHistory: () => ipcRenderer.invoke('history:get'),

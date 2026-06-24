@@ -512,6 +512,19 @@ ipcMain.handle('spotify:exchange-code', async (_, code) => {
   return true;
 });
 
+ipcMain.handle('spotify:search-album', async (_, { title, artist }) => {
+  try {
+    const q = artist ? `album:${title} artist:${artist}` : title;
+    const result = await spotifyGet(`/v1/search?q=${encodeURIComponent(q)}&type=album&limit=5`);
+    if (result.status !== 200) return null;
+    const albums = result.body?.albums?.items || [];
+    const match = albums.find(a => a.name.toLowerCase() === title.toLowerCase()) || albums[0];
+    return match?.images?.[1]?.url || match?.images?.[0]?.url || null;
+  } catch (e) {
+    return null;
+  }
+});
+
 ipcMain.handle('spotify:fetch-data', async () => {
   const [topArtistsRes, topTracksRes, recentRes, playlistsRes] = await Promise.all([
     spotifyGet('/v1/me/top/artists?time_range=medium_term&limit=20'),
