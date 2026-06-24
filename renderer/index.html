@@ -491,6 +491,7 @@
     <button class="mode-btn active" data-mode="documentaries" onclick="setMode(this)">Documentaries</button>
     <button class="mode-btn" data-mode="movies" onclick="setMode(this)">Movies</button>
     <button class="mode-btn" data-mode="shows" onclick="setMode(this)">Shows</button>
+    <button class="mode-btn" data-mode="music" onclick="setMode(this)">Music</button>
   </div>
 
   <!-- Setup Panel -->
@@ -560,6 +561,48 @@
 
     <div class="divider"></div>
 
+    <!-- Spotify Section -->
+    <div class="panel-label">Spotify Listening History</div>
+
+    <div id="spotifySetup">
+      <div id="spotifyCredsForm">
+        <div class="setup-grid">
+          <div class="field-group">
+            <label>Spotify Client ID</label>
+            <input type="password" id="spotifyClientId" placeholder="Client ID from developer.spotify.com" autocomplete="off" />
+          </div>
+          <div class="field-group">
+            <label>Spotify Client Secret</label>
+            <input type="password" id="spotifyClientSecret" placeholder="Client Secret" autocomplete="off" />
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text-muted);line-height:1.7">
+            Create a free app at <a href="#" class="instr-link" onclick="api.openExternal('https://developer.spotify.com/dashboard'); return false;">developer.spotify.com/dashboard</a> — add Redirect URI <span class="copy-uri" onclick="copySpotifyUri(this)" title="Click to copy">http://localhost:47822/callback</span>
+          </div>
+        </div>
+        <div class="trakt-btn-row">
+          <button class="btn-small" onclick="saveSpotifyCreds()">Save &amp; Connect Spotify</button>
+        </div>
+        <div class="cred-saved" id="spotifyCredsSaved">✓ Credentials saved</div>
+      </div>
+
+      <div id="spotifyAuthSection" style="display:none">
+        <div class="trakt-status">
+          <div class="trakt-dot" id="spotifyDot"></div>
+          <div class="trakt-status-text">
+            <strong id="spotifyStatusTitle">Not connected</strong>
+            <span id="spotifyStatusSub">Click below to authorize with your Spotify account</span>
+          </div>
+        </div>
+        <div class="trakt-btn-row">
+          <button class="btn-small" id="spotifyConnectBtn" onclick="connectSpotify()">Connect Spotify →</button>
+          <button class="btn-small" id="spotifyDisconnectBtn" onclick="disconnectSpotify()" style="display:none">Disconnect</button>
+          <button class="btn-small" onclick="resetSpotifyCreds()" style="color:var(--text-dim)">Change Credentials</button>
+        </div>
+      </div>
+    </div>
+
     <div class="divider"></div>
 
     <!-- CSV Fallback -->
@@ -587,19 +630,38 @@
       <div class="toggle-icon">+</div>
     </div>
     <div class="collapsible-body">
-      <div class="mood-chips" id="moodChips">
-        <button class="chip" onclick="toggleChip(this)">Dark &amp; Heavy</button>
-        <button class="chip" onclick="toggleChip(this)">Corporate Corruption</button>
-        <button class="chip" onclick="toggleChip(this)">Crime &amp; Justice</button>
-        <button class="chip" onclick="toggleChip(this)">Cults &amp; Extremism</button>
-        <button class="chip" onclick="toggleChip(this)">Politics &amp; Power</button>
-        <button class="chip" onclick="toggleChip(this)">War &amp; History</button>
-        <button class="chip" onclick="toggleChip(this)">Music</button>
-        <button class="chip" onclick="toggleChip(this)">Science &amp; Medicine</button>
-        <button class="chip" onclick="toggleChip(this)">Lighter Today</button>
-        <button class="chip" onclick="toggleChip(this)">Deep Cut / Obscure</button>
-        <button class="chip" onclick="toggleChip(this)">Character Study</button>
-        <button class="chip" onclick="toggleChip(this)">Surprising / Weird</button>
+      <div id="filmMoodOptions">
+        <div class="mood-chips" style="margin-bottom:12px">
+          <button class="chip" id="englishAudioBtn" onclick="toggleEnglishAudio()">English Audio Only</button>
+        </div>
+        <div class="mood-chips" id="moodChips">
+          <button class="chip" onclick="toggleChip(this)">Dark &amp; Heavy</button>
+          <button class="chip" onclick="toggleChip(this)">Corporate Corruption</button>
+          <button class="chip" onclick="toggleChip(this)">Crime &amp; Justice</button>
+          <button class="chip" onclick="toggleChip(this)">Cults &amp; Extremism</button>
+          <button class="chip" onclick="toggleChip(this)">Politics &amp; Power</button>
+          <button class="chip" onclick="toggleChip(this)">War &amp; History</button>
+          <button class="chip" onclick="toggleChip(this)">Music</button>
+          <button class="chip" onclick="toggleChip(this)">Science &amp; Medicine</button>
+          <button class="chip" onclick="toggleChip(this)">Lighter Today</button>
+          <button class="chip" onclick="toggleChip(this)">Deep Cut / Obscure</button>
+          <button class="chip" onclick="toggleChip(this)">Character Study</button>
+          <button class="chip" onclick="toggleChip(this)">Surprising / Weird</button>
+        </div>
+      </div>
+      <div id="musicMoodOptions" style="display:none">
+        <div class="mood-chips" id="musicMoodChips">
+          <button class="chip" onclick="toggleChip(this)">Energetic / Upbeat</button>
+          <button class="chip" onclick="toggleChip(this)">Melancholic / Moody</button>
+          <button class="chip" onclick="toggleChip(this)">Focus / Concentration</button>
+          <button class="chip" onclick="toggleChip(this)">Electronic / Dance</button>
+          <button class="chip" onclick="toggleChip(this)">Jazz / Soul / R&amp;B</button>
+          <button class="chip" onclick="toggleChip(this)">Indie / Alternative</button>
+          <button class="chip" onclick="toggleChip(this)">Heavy / Intense</button>
+          <button class="chip" onclick="toggleChip(this)">Chill / Lo-fi</button>
+          <button class="chip" onclick="toggleChip(this)">Deep Cut / Obscure</button>
+          <button class="chip" onclick="toggleChip(this)">Classic / Timeless</button>
+        </div>
       </div>
       <div style="margin-top:16px">
         <label>Or describe your mood</label>
@@ -619,6 +681,7 @@
   <div class="result-card" id="resultCard">
     <div class="result-header">
       <div class="result-year" id="resYear"></div>
+      <div class="result-artist" id="resArtist" style="display:none;font-size:13px;color:var(--text-muted);letter-spacing:1px;margin-bottom:6px;text-transform:uppercase"></div>
       <div class="result-title" id="resTitle"></div>
       <div class="result-meta" id="resMeta"></div>
     </div>
@@ -631,7 +694,7 @@
         <div class="result-section-label">Why this for you</div>
         <div class="result-why" id="resWhy"></div>
       </div>
-      <div class="result-section">
+      <div class="result-section" id="resTraktRow">
         <div class="result-section-label">Trakt</div>
         <div id="resTraktSection"><span style="color:var(--text-dim);font-size:11px">—</span></div>
       </div>
@@ -650,6 +713,7 @@
     <div class="result-player-actions" id="playerActions" style="display:none">
       <button class="btn-small" id="embySearchBtn" onclick="searchEmby()">Search Emby</button>
       <button class="btn-small" id="infuseSearchBtn" onclick="searchInfuse()">Search Infuse</button>
+      <button class="btn-small" id="spotifySearchBtn" onclick="searchSpotify()" style="display:none">Open in Spotify</button>
     </div>
   </div>
 

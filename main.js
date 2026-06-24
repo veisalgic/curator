@@ -76,7 +76,11 @@ function saveHistory(history) {
 const TRAKT_REDIRECT_PORT = 47821;
 const TRAKT_REDIRECT_URI = `http://localhost:${TRAKT_REDIRECT_PORT}/callback`;
 
+const SPOTIFY_REDIRECT_PORT = 47822;
+const SPOTIFY_REDIRECT_URI = `http://localhost:${SPOTIFY_REDIRECT_PORT}/callback`;
+
 let oauthServer = null;
+let spotifyOAuthServer = null;
 
 function startOAuthServer() {
   return new Promise((resolve, reject) => {
@@ -96,6 +100,29 @@ function startOAuthServer() {
     oauthServer.on('error', reject);
     setTimeout(() => {
       if (oauthServer) { oauthServer.close(); oauthServer = null; }
+      reject(new Error('OAuth timed out'));
+    }, 5 * 60 * 1000);
+  });
+}
+
+function startSpotifyOAuthServer() {
+  return new Promise((resolve, reject) => {
+    spotifyOAuthServer = http.createServer((req, res) => {
+      const url = new URL(req.url, `http://localhost:${SPOTIFY_REDIRECT_PORT}`);
+      if (url.pathname === '/callback') {
+        const code = url.searchParams.get('code');
+        const error = url.searchParams.get('error');
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(`<html><body style="background:#0a0a0a;color:#e8e4dc;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center"><div style="font-size:48px;margin-bottom:16px">${error ? '✗' : '✓'}</div><div style="font-size:18px;color:#1DB954">${error ? 'Authorization failed' : 'Spotify connected'}</div><div style="margin-top:12px;color:#666;font-size:13px">${error ? error : 'You can close this window and return to Curator.'}</div></div></body></html>`);
+        if (spotifyOAuthServer) { spotifyOAuthServer.close(); spotifyOAuthServer = null; }
+        if (code) resolve(code);
+        else reject(new Error(error || 'No code returned'));
+      }
+    });
+    spotifyOAuthServer.listen(SPOTIFY_REDIRECT_PORT, 'localhost', () => {});
+    spotifyOAuthServer.on('error', reject);
+    setTimeout(() => {
+      if (spotifyOAuthServer) { spotifyOAuthServer.close(); spotifyOAuthServer = null; }
       reject(new Error('OAuth timed out'));
     }, 5 * 60 * 1000);
   });
@@ -225,6 +252,54 @@ async function traktPost(accessToken, clientId, traktPath, bodyObj) {
   return result;
 }
 
+// ── Spotify helpers ───────────────────────────────────────────────────────────
+async function refreshSpotifyToken() {
+  const clientId = await getCredential('spotifyClientId');
+  const clientSecret = await getCredential('spotifyClientSecret');
+  const refreshToken = await getCredential('spotifyRefreshToken');
+  if (!refreshToken || !clientId || !clientSecret) {
+    throw new Error('Spotify session expired — please reconnect');
+  }
+  const body = `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`;
+  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const result = await httpsRequest({
+    hostname: 'accounts.spotify.com',
+    path: '/api/token',
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Length': Buffer.byteLength(body),
+    },
+  }, body);
+  if (result.status !== 200) throw new Error('Spotify token expired — please reconnect');
+  await storeCredential('spotifyAccessToken', result.body.access_token);
+  if (result.body.refresh_token) {
+    await storeCredential('spotifyRefreshToken', result.body.refresh_token);
+  }
+  return result.body.access_token;
+}
+
+async function spotifyGet(path) {
+  let accessToken = await getCredential('spotifyAccessToken');
+  let result = await httpsRequest({
+    hostname: 'api.spotify.com',
+    path,
+    method: 'GET',
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+  });
+  if (result.status === 401) {
+    accessToken = await refreshSpotifyToken();
+    result = await httpsRequest({
+      hostname: 'api.spotify.com',
+      path,
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+  }
+  return result;
+}
+
 // ── IPC Handlers ──────────────────────────────────────────────────────────────
 
 ipcMain.handle('creds:get-all', async () => {
@@ -233,6 +308,9 @@ ipcMain.handle('creds:get-all', async () => {
   const traktClientSecret = await getCredential('traktClientSecret');
   const traktAccessToken = await getCredential('traktAccessToken');
   const embyUrl = await getCredential('embyUrl');
+  const spotifyClientId = await getCredential('spotifyClientId');
+  const spotifyClientSecret = await getCredential('spotifyClientSecret');
+  const spotifyAccessToken = await getCredential('spotifyAccessToken');
   return {
     hasAnthropic: !!anthropic,
     hasTraktClientId: !!traktClientId,
@@ -242,6 +320,9 @@ ipcMain.handle('creds:get-all', async () => {
     traktClientId,
     traktClientSecret,
     embyUrl,
+    hasSpotifyClientId: !!spotifyClientId,
+    hasSpotifyClientSecret: !!spotifyClientSecret,
+    hasSpotifyToken: !!spotifyAccessToken,
   };
 });
 
@@ -253,6 +334,12 @@ ipcMain.handle('creds:save', async (_, { key, value }) => {
 ipcMain.handle('creds:clear-trakt', async () => {
   await deleteCredential('traktAccessToken');
   await deleteCredential('traktRefreshToken');
+  return true;
+});
+
+ipcMain.handle('creds:clear-spotify', async () => {
+  await deleteCredential('spotifyAccessToken');
+  await deleteCredential('spotifyRefreshToken');
   return true;
 });
 
@@ -357,6 +444,25 @@ ipcMain.handle('trakt:lookup', async (_, { title, mode }) => {
   }
 });
 
+// Mark a title as watched in Trakt history
+ipcMain.handle('trakt:mark-seen', async (_, { traktId, title, year, mode }) => {
+  const accessToken = await getCredential('traktAccessToken');
+  const clientId = await getCredential('traktClientId');
+  if (!accessToken || !clientId) throw new Error('Not connected to Trakt');
+  const isShow = mode === 'shows';
+  const listKey = isShow ? 'shows' : 'movies';
+  const itemKey = isShow ? 'show' : 'movie';
+  const ids = traktId ? { trakt: traktId } : {};
+  const item = { ids, title, year: parseInt(year) || undefined };
+  const result = await traktPost(accessToken, clientId, '/sync/history', {
+    [listKey]: [{ [itemKey]: item, watched_at: new Date().toISOString() }]
+  });
+  if (result.status !== 200 && result.status !== 201) {
+    throw new Error('Mark seen on Trakt failed: ' + result.status);
+  }
+  return true;
+});
+
 // Add a title to the user's Trakt watchlist
 ipcMain.handle('trakt:add-watchlist', async (_, { traktId, title, year, mode }) => {
   const accessToken = await getCredential('traktAccessToken');
@@ -372,6 +478,68 @@ ipcMain.handle('trakt:add-watchlist', async (_, { traktId, title, year, mode }) 
     throw new Error('Watchlist add failed: ' + result.status);
   }
   return true;
+});
+
+// ── Spotify IPC ───────────────────────────────────────────────────────────────
+ipcMain.handle('spotify:start-oauth', async () => {
+  const clientId = await getCredential('spotifyClientId');
+  if (!clientId) throw new Error('Spotify Client ID not configured');
+  const codePromise = startSpotifyOAuthServer();
+  const scopes = 'user-top-read user-read-recently-played playlist-read-private';
+  const authUrl = `https://accounts.spotify.com/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(SPOTIFY_REDIRECT_URI)}&scope=${encodeURIComponent(scopes)}`;
+  shell.openExternal(authUrl);
+  return codePromise;
+});
+
+ipcMain.handle('spotify:exchange-code', async (_, code) => {
+  const clientId = await getCredential('spotifyClientId');
+  const clientSecret = await getCredential('spotifyClientSecret');
+  const body = `grant_type=authorization_code&code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(SPOTIFY_REDIRECT_URI)}`;
+  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const result = await httpsRequest({
+    hostname: 'accounts.spotify.com',
+    path: '/api/token',
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Length': Buffer.byteLength(body),
+    },
+  }, body);
+  if (result.status !== 200) throw new Error('Token exchange failed: ' + JSON.stringify(result.body));
+  await storeCredential('spotifyAccessToken', result.body.access_token);
+  await storeCredential('spotifyRefreshToken', result.body.refresh_token);
+  return true;
+});
+
+ipcMain.handle('spotify:fetch-data', async () => {
+  const [topArtistsRes, topTracksRes, recentRes, playlistsRes] = await Promise.all([
+    spotifyGet('/v1/me/top/artists?time_range=medium_term&limit=20'),
+    spotifyGet('/v1/me/top/tracks?time_range=medium_term&limit=20'),
+    spotifyGet('/v1/me/player/recently-played?limit=20'),
+    spotifyGet('/v1/me/playlists?limit=20'),
+  ]);
+
+  const topArtists = (topArtistsRes.body?.items || []).map(a => ({
+    name: a.name,
+    genres: a.genres || [],
+  }));
+
+  const topTracks = (topTracksRes.body?.items || []).map(t => ({
+    name: t.name,
+    artist: t.artists?.[0]?.name || '',
+  }));
+
+  const recentTracks = (recentRes.body?.items || []).map(i => ({
+    name: i.track?.name || '',
+    artist: i.track?.artists?.[0]?.name || '',
+  }));
+
+  const playlists = (playlistsRes.body?.items || [])
+    .map(p => p.name)
+    .filter(Boolean);
+
+  return { topArtists, topTracks, recentTracks, playlists };
 });
 
 // Open URL in system browser

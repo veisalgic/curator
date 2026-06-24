@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Curator</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#e8c547">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Curator">
+<link rel="apple-touch-icon" href="/icon.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -333,19 +339,100 @@
   .history-watchlist { font-size: 9px; letter-spacing: 1px; color: var(--success); margin-left: 4px; }
 
   footer { text-align: center; margin-top: 40px; font-size: 10px; color: var(--text-dim); letter-spacing: 2px; }
+
+  /* result-header defined above */
+  /* ── Sidebar ─────────────────────────────────────────────────── */
+  .settings-btn {
+    position: absolute;
+    left: 0;
+    top: 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .settings-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 199;
+    backdrop-filter: blur(2px);
+  }
+  .sidebar-backdrop.open { display: block; }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 340px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    z-index: 200;
+    overflow-y: auto;
+    transform: translateX(-340px);
+    transition: transform 0.25s ease;
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
+  }
+  .sidebar-title {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .sidebar-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 2px 4px;
+    line-height: 1;
+    transition: color 0.15s;
+    font-family: monospace;
+  }
+  .sidebar-close:hover { color: var(--text); }
+
+  .sidebar .panel {
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-radius: 0;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--border);
+  }
 </style>
 </head>
 <body>
-<div class="container">
-  <header>
-    <div class="logo">Cur<span>ator</span></div>
-    <div class="tagline" id="tagline">Personalized documentary recommendations</div>
-  </header>
 
-  <div class="mode-toggle">
-    <button class="mode-btn active" data-mode="documentaries" onclick="setMode(this)">Documentaries</button>
-    <button class="mode-btn" data-mode="movies" onclick="setMode(this)">Movies</button>
-    <button class="mode-btn" data-mode="shows" onclick="setMode(this)">Shows</button>
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <span class="sidebar-title">Settings</span>
+    <button class="sidebar-close" onclick="closeSidebar()">✕</button>
   </div>
 
   <!-- Setup Panel -->
@@ -413,6 +500,49 @@
 
       <div class="divider"></div>
 
+      <div class="panel-label">Spotify Listening History</div>
+
+      <div id="spotifySetup">
+        <div id="spotifyCredsForm">
+          <div class="setup-grid">
+            <div class="field-group">
+              <label>Spotify Client ID</label>
+              <input type="password" id="spotifyClientId" placeholder="Client ID" autocomplete="off" />
+            </div>
+            <div class="field-group">
+              <label>Spotify Client Secret</label>
+              <input type="password" id="spotifyClientSecret" placeholder="Client Secret" autocomplete="off" />
+            </div>
+          </div>
+          <div style="margin-bottom:12px">
+            <div style="font-size:11px;color:var(--text-muted);line-height:1.7">
+              Create a free app at <a href="https://developer.spotify.com/dashboard" target="_blank" class="instr-link">developer.spotify.com/dashboard</a> — add Redirect URI <span class="copy-uri" onclick="copySpotifyUri(this)" title="Click to copy" id="spotifyRedirectUriSpan">loading...</span>
+            </div>
+          </div>
+          <div class="trakt-btn-row">
+            <button class="btn-small" onclick="saveSpotifyCreds()">Save &amp; Connect Spotify</button>
+          </div>
+          <div class="cred-saved" id="spotifyCredsSaved">✓ Credentials saved</div>
+        </div>
+
+        <div id="spotifyAuthSection" style="display:none">
+          <div class="trakt-status">
+            <div class="trakt-dot" id="spotifyDot"></div>
+            <div class="trakt-status-text">
+              <strong id="spotifyStatusTitle">Not connected</strong>
+              <span id="spotifyStatusSub">Click below to authorize with your Spotify account</span>
+            </div>
+          </div>
+          <div class="trakt-btn-row">
+            <button class="btn-small" id="spotifyConnectBtn" onclick="connectSpotify()">Connect Spotify →</button>
+            <button class="btn-small" id="spotifyDisconnectBtn" onclick="disconnectSpotify()" style="display:none">Disconnect</button>
+            <button class="btn-small" onclick="resetSpotifyCreds()" style="color:var(--text-dim)">Change Credentials</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
       <div class="collapsible-header" onclick="toggleCollapse(this)">
         <div class="panel-label" style="margin-bottom:0">CSV Fallback <span style="color:var(--text-dim);font-size:10px;margin-left:8px">— if Trakt isn't connected</span></div>
         <div class="toggle-icon">+</div>
@@ -431,6 +561,67 @@
     </div>
   </div>
 
+  <!-- Taste Profile Panel -->
+  <div class="panel" id="tastePanel">
+    <div class="collapsible-header" onclick="toggleCollapse(this)">
+      <div class="panel-label" style="margin-bottom:0">Taste Profile <span style="color:var(--text-dim);font-size:10px;margin-left:8px">— no Trakt? answer a few questions</span></div>
+      <div class="toggle-icon">+</div>
+    </div>
+    <div class="collapsible-body" id="tasteBody">
+
+      <div style="margin-bottom:20px">
+        <label>Titles you love</label>
+        <textarea id="tasteTitles" placeholder="e.g. The Act of Killing, The Wire, Zodiac, Succession..." style="margin-top:6px;height:64px;"></textarea>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <label style="display:block;margin-bottom:8px">Age range</label>
+        <div class="mood-chips" id="tasteAge">
+          <button class="chip" data-group="age" onclick="selectChip(this)">Under 25</button>
+          <button class="chip" data-group="age" onclick="selectChip(this)">25–34</button>
+          <button class="chip" data-group="age" onclick="selectChip(this)">35–44</button>
+          <button class="chip" data-group="age" onclick="selectChip(this)">45–54</button>
+          <button class="chip" data-group="age" onclick="selectChip(this)">55+</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <label style="display:block;margin-bottom:8px">Discovery style</label>
+        <div class="mood-chips" id="tasteDiscovery">
+          <button class="chip" data-group="discovery" onclick="selectChip(this)">Mainstream</button>
+          <button class="chip" data-group="discovery" onclick="selectChip(this)">Mix of both</button>
+          <button class="chip" data-group="discovery" onclick="selectChip(this)">Deep cuts only</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <label style="display:block;margin-bottom:8px">Era preference</label>
+        <div class="mood-chips" id="tasteEra">
+          <button class="chip" data-group="era" onclick="selectChip(this)">Classic (pre-80s)</button>
+          <button class="chip" data-group="era" onclick="selectChip(this)">80s–90s</button>
+          <button class="chip" data-group="era" onclick="selectChip(this)">2000s–2010s</button>
+          <button class="chip" data-group="era" onclick="selectChip(this)">Recent only</button>
+          <button class="chip" data-group="era" onclick="selectChip(this)">Any era</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <label style="display:block;margin-bottom:8px">Dark content comfort</label>
+        <div class="mood-chips" id="tasteDark">
+          <button class="chip" data-group="dark" onclick="selectChip(this)">Keep it light</button>
+          <button class="chip" data-group="dark" onclick="selectChip(this)">Some edge</button>
+          <button class="chip" data-group="dark" onclick="selectChip(this)">Dark themes OK</button>
+          <button class="chip" data-group="dark" onclick="selectChip(this)">No limits</button>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+        <button class="btn-small" onclick="saveProfile()">Save Profile</button>
+        <div class="cred-saved" id="profileSaved" style="margin-top:0">✓ Saved</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Mood Panel -->
   <div class="panel">
     <div class="collapsible-header" onclick="toggleCollapse(this)">
@@ -438,28 +629,64 @@
       <div class="toggle-icon">+</div>
     </div>
     <div class="collapsible-body">
-      <div class="mood-chips" style="margin-bottom:12px">
-        <button class="chip" id="englishAudioBtn" onclick="toggleEnglishAudio()">English Audio Only</button>
+      <div id="filmMoodOptions">
+        <div class="mood-chips" style="margin-bottom:12px">
+          <button class="chip" id="englishAudioBtn" onclick="toggleEnglishAudio()">English Audio Only</button>
+        </div>
+        <div class="mood-chips" id="moodChips">
+          <button class="chip" onclick="toggleChip(this)">Dark &amp; Heavy</button>
+          <button class="chip" onclick="toggleChip(this)">Corporate Corruption</button>
+          <button class="chip" onclick="toggleChip(this)">Crime &amp; Justice</button>
+          <button class="chip" onclick="toggleChip(this)">Cults &amp; Extremism</button>
+          <button class="chip" onclick="toggleChip(this)">Politics &amp; Power</button>
+          <button class="chip" onclick="toggleChip(this)">War &amp; History</button>
+          <button class="chip" onclick="toggleChip(this)">Music</button>
+          <button class="chip" onclick="toggleChip(this)">Science &amp; Medicine</button>
+          <button class="chip" onclick="toggleChip(this)">Lighter Today</button>
+          <button class="chip" onclick="toggleChip(this)">Deep Cut / Obscure</button>
+          <button class="chip" onclick="toggleChip(this)">Character Study</button>
+          <button class="chip" onclick="toggleChip(this)">Surprising / Weird</button>
+        </div>
       </div>
-      <div class="mood-chips" id="moodChips">
-        <button class="chip" onclick="toggleChip(this)">Dark &amp; Heavy</button>
-        <button class="chip" onclick="toggleChip(this)">Corporate Corruption</button>
-        <button class="chip" onclick="toggleChip(this)">Crime &amp; Justice</button>
-        <button class="chip" onclick="toggleChip(this)">Cults &amp; Extremism</button>
-        <button class="chip" onclick="toggleChip(this)">Politics &amp; Power</button>
-        <button class="chip" onclick="toggleChip(this)">War &amp; History</button>
-        <button class="chip" onclick="toggleChip(this)">Music</button>
-        <button class="chip" onclick="toggleChip(this)">Science &amp; Medicine</button>
-        <button class="chip" onclick="toggleChip(this)">Lighter Today</button>
-        <button class="chip" onclick="toggleChip(this)">Deep Cut / Obscure</button>
-        <button class="chip" onclick="toggleChip(this)">Character Study</button>
-        <button class="chip" onclick="toggleChip(this)">Surprising / Weird</button>
+      <div id="musicMoodOptions" style="display:none">
+        <div class="mood-chips" id="musicMoodChips">
+          <button class="chip" onclick="toggleChip(this)">Energetic / Upbeat</button>
+          <button class="chip" onclick="toggleChip(this)">Melancholic / Moody</button>
+          <button class="chip" onclick="toggleChip(this)">Focus / Concentration</button>
+          <button class="chip" onclick="toggleChip(this)">Electronic / Dance</button>
+          <button class="chip" onclick="toggleChip(this)">Jazz / Soul / R&amp;B</button>
+          <button class="chip" onclick="toggleChip(this)">Indie / Alternative</button>
+          <button class="chip" onclick="toggleChip(this)">Heavy / Intense</button>
+          <button class="chip" onclick="toggleChip(this)">Chill / Lo-fi</button>
+          <button class="chip" onclick="toggleChip(this)">Deep Cut / Obscure</button>
+          <button class="chip" onclick="toggleChip(this)">Classic / Timeless</button>
+        </div>
       </div>
       <div style="margin-top:16px">
         <label>Or describe your mood</label>
         <textarea id="customMood" placeholder="e.g. something about systemic failure, or a compelling villain..." style="margin-top:6px;height:60px;"></textarea>
       </div>
     </div>
+  </div>
+
+</div><!-- /sidebar -->
+
+<!-- Backdrop -->
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+<!-- Main -->
+<div class="container">
+  <header style="position:relative">
+    <button class="settings-btn" onclick="toggleSidebar()">⚙ Settings</button>
+    <div class="logo">Cur<span>ator</span></div>
+    <div class="tagline" id="tagline">Personalized documentary recommendations</div>
+  </header>
+
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="documentaries" onclick="setMode(this)">Documentaries</button>
+    <button class="mode-btn" data-mode="movies" onclick="setMode(this)">Movies</button>
+    <button class="mode-btn" data-mode="shows" onclick="setMode(this)">Shows</button>
+    <button class="mode-btn" data-mode="music" onclick="setMode(this)">Music</button>
   </div>
 
   <div class="error-msg" id="errorMsg"></div>
@@ -470,6 +697,7 @@
   <div class="result-card" id="resultCard">
     <div class="result-header">
       <div class="result-year" id="resYear"></div>
+      <div class="result-artist" id="resArtist" style="display:none;font-size:13px;color:var(--text-muted);letter-spacing:1px;margin-bottom:6px;text-transform:uppercase"></div>
       <div class="result-title" id="resTitle"></div>
       <div class="result-meta" id="resMeta"></div>
     </div>
@@ -482,7 +710,7 @@
         <div class="result-section-label">Why this for you</div>
         <div class="result-why" id="resWhy"></div>
       </div>
-      <div class="result-section">
+      <div class="result-section" id="resTraktRow">
         <div class="result-section-label">Trakt</div>
         <div id="resTraktSection"><span style="color:var(--text-dim);font-size:11px">—</span></div>
       </div>
@@ -493,7 +721,9 @@
     </div>
     <div class="result-secondary-actions">
       <button class="btn-small" id="watchlistBtn" onclick="addToWatchlist()">+ Watchlist</button>
-      <button class="btn-small" onclick="markSeen()">Mark Seen</button>
+      <button class="btn-small" id="markSeenBtn" onclick="markSeen()">Mark Seen</button>
+      <button class="btn-small" id="justwatchBtn" onclick="openJustWatch()" style="color:var(--accent);border-color:var(--accent)">JustWatch →</button>
+      <button class="btn-small" id="spotifySearchBtn" onclick="openSpotify()" style="display:none;color:#1DB954;border-color:#1DB954">Open in Spotify →</button>
       <div style="flex:1"></div>
       <button class="btn-small" id="likeBtn" onclick="setFeedback('liked')" title="Good call">👍</button>
       <button class="btn-small" id="dislikeBtn" onclick="setFeedback('disliked')" title="Not for me">👎</button>
@@ -534,22 +764,27 @@ let lastRec = null;
 let moreLikeSeed = null;
 let currentMode = 'documentaries';
 let preferEnglishAudio = false;
+let spotifyConnected = false;
+let spotifyData = null;
 
 // ── Mode Toggle ───────────────────────────────────────────────────────────────
 const taglines = {
   documentaries: 'Personalized documentary recommendations',
   movies: 'Personalized movie recommendations',
   shows: 'Personalized TV show recommendations',
+  music: 'Personalized album recommendations',
 };
 const mainBtnLabels = {
   documentaries: '▶  Pick a Documentary',
   movies: '▶  Pick a Movie',
   shows: '▶  Pick a Show',
+  music: '▶  Discover an Album',
 };
 const nextLabels = {
   documentaries: 'Next Documentary →',
   movies: 'Next Movie →',
   shows: 'Next Show →',
+  music: 'Next Album →',
 };
 
 function setMode(btn) {
@@ -564,14 +799,18 @@ function setMode(btn) {
   seenThisSession.clear();
   setStatus('');
   showError('');
+  const isMusic = currentMode === 'music';
+  document.getElementById('filmMoodOptions').style.display = isMusic ? 'none' : 'block';
+  document.getElementById('musicMoodOptions').style.display = isMusic ? 'block' : 'none';
+  document.querySelectorAll('.chip.active').forEach(c => c.classList.remove('active'));
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
-  // Set redirect URI display
+  // Set redirect URI displays
   const redirectUri = window.location.origin + window.location.pathname.replace(/\/$/, '');
-  const span = document.getElementById('redirectUriSpan');
-  span.textContent = redirectUri;
+  document.getElementById('redirectUriSpan').textContent = redirectUri;
+  document.getElementById('spotifyRedirectUriSpan').textContent = redirectUri;
 
   // Load saved credentials
   const apiKey = store.get('anthropic');
@@ -588,25 +827,55 @@ async function init() {
 
   if (accessToken) await loadTraktHistory();
 
+  // Spotify
+  const spotifyClientId = store.get('spotifyClientId');
+  const spotifyClientSecret = store.get('spotifyClientSecret');
+  const spotifyToken = store.get('spotifyAccessToken');
+
+  if (spotifyClientId && spotifyClientSecret) {
+    showSpotifyAuthSection();
+    if (spotifyToken) setSpotifyConnected(true);
+  }
+
+  if (spotifyToken) await loadSpotifyData();
+
   if (apiKey && accessToken) collapseSetup();
 
+  loadProfile();
+
+  // Auto-open sidebar on first visit
+  if (!apiKey) toggleSidebar();
   renderHistory();
 
-  // Handle Trakt OAuth callback (code in URL)
+  // Handle OAuth callbacks (code in URL)
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
+  const state = params.get('state');
   if (code) {
     window.history.replaceState({}, '', window.location.pathname);
-    setStatus('Exchanging authorization code...');
-    try {
-      await exchangeTraktCode(code);
-      setTraktConnected(true);
-      await loadTraktHistory();
-      setStatus('');
-      if (store.get('anthropic')) collapseSetup();
-    } catch (err) {
-      showError('Trakt auth failed: ' + err.message);
-      setStatus('');
+    if (state === 'spotify') {
+      setStatus('Connecting Spotify...');
+      try {
+        await exchangeSpotifyCode(code);
+        setSpotifyConnected(true);
+        await loadSpotifyData();
+        setStatus('');
+      } catch (err) {
+        showError('Spotify auth failed: ' + err.message);
+        setStatus('');
+      }
+    } else {
+      setStatus('Exchanging authorization code...');
+      try {
+        await exchangeTraktCode(code);
+        setTraktConnected(true);
+        await loadTraktHistory();
+        setStatus('');
+        if (store.get('anthropic')) collapseSetup();
+      } catch (err) {
+        showError('Trakt auth failed: ' + err.message);
+        setStatus('');
+      }
     }
   }
 }
@@ -724,6 +993,149 @@ async function disconnectTrakt() {
   document.getElementById('historyCount').textContent = '';
 }
 
+// ── Spotify OAuth (web redirect flow) ────────────────────────────────────────
+function saveSpotifyCreds() {
+  const clientId = document.getElementById('spotifyClientId').value.trim();
+  const clientSecret = document.getElementById('spotifyClientSecret').value.trim();
+  if (!clientId || !clientSecret) { showError('Enter both Spotify Client ID and Client Secret.'); return; }
+  store.set('spotifyClientId', clientId);
+  store.set('spotifyClientSecret', clientSecret);
+  const el = document.getElementById('spotifyCredsSaved');
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 2000);
+  showSpotifyAuthSection();
+}
+
+function showSpotifyAuthSection() {
+  document.getElementById('spotifyCredsForm').style.display = 'none';
+  document.getElementById('spotifyAuthSection').style.display = 'block';
+}
+
+function resetSpotifyCreds() {
+  store.remove('spotifyClientId');
+  store.remove('spotifyClientSecret');
+  document.getElementById('spotifyCredsForm').style.display = 'block';
+  document.getElementById('spotifyAuthSection').style.display = 'none';
+  document.getElementById('spotifyClientId').value = '';
+  document.getElementById('spotifyClientSecret').value = '';
+}
+
+function setSpotifyConnected(connected) {
+  spotifyConnected = connected;
+  const dot = document.getElementById('spotifyDot');
+  const title = document.getElementById('spotifyStatusTitle');
+  const sub = document.getElementById('spotifyStatusSub');
+  document.getElementById('spotifyConnectBtn').style.display = connected ? 'none' : 'inline-block';
+  document.getElementById('spotifyDisconnectBtn').style.display = connected ? 'inline-block' : 'none';
+  if (connected) {
+    dot.className = 'trakt-dot connected';
+    title.textContent = 'Connected';
+    sub.textContent = 'Listening history loaded — Claude will use your taste profile';
+  } else {
+    dot.className = 'trakt-dot';
+    title.textContent = 'Not connected';
+    sub.textContent = 'Click below to authorize with your Spotify account';
+  }
+}
+
+function connectSpotify() {
+  const clientId = store.get('spotifyClientId');
+  if (!clientId) { showError('Save your Spotify credentials first.'); return; }
+  const redirectUri = window.location.origin + window.location.pathname.replace(/\/$/, '');
+  const scopes = 'user-top-read user-read-recently-played playlist-read-private';
+  window.location.href = `https://accounts.spotify.com/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=spotify`;
+}
+
+async function exchangeSpotifyCode(code) {
+  const clientId = store.get('spotifyClientId');
+  const clientSecret = store.get('spotifyClientSecret');
+  const redirectUri = window.location.origin + window.location.pathname.replace(/\/$/, '');
+  const auth = btoa(`${clientId}:${clientSecret}`);
+  const body = new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri });
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  if (!res.ok) throw new Error('Token exchange failed: ' + res.status);
+  const data = await res.json();
+  store.set('spotifyAccessToken', data.access_token);
+  store.set('spotifyRefreshToken', data.refresh_token);
+}
+
+async function refreshSpotifyToken() {
+  const clientId = store.get('spotifyClientId');
+  const clientSecret = store.get('spotifyClientSecret');
+  const refreshToken = store.get('spotifyRefreshToken');
+  if (!refreshToken) throw new Error('Spotify session expired — please reconnect');
+  const auth = btoa(`${clientId}:${clientSecret}`);
+  const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken });
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  if (!res.ok) throw new Error('Spotify session expired — please reconnect');
+  const data = await res.json();
+  store.set('spotifyAccessToken', data.access_token);
+  if (data.refresh_token) store.set('spotifyRefreshToken', data.refresh_token);
+  return data.access_token;
+}
+
+async function spotifyFetch(path) {
+  let token = store.get('spotifyAccessToken');
+  let res = await fetch('https://api.spotify.com' + path, { headers: { 'Authorization': `Bearer ${token}` } });
+  if (res.status === 401) {
+    token = await refreshSpotifyToken();
+    res = await fetch('https://api.spotify.com' + path, { headers: { 'Authorization': `Bearer ${token}` } });
+  }
+  return res;
+}
+
+async function disconnectSpotify() {
+  store.remove('spotifyAccessToken');
+  store.remove('spotifyRefreshToken');
+  setSpotifyConnected(false);
+  spotifyData = null;
+}
+
+async function loadSpotifyData() {
+  setStatus('Fetching your Spotify listening history...');
+  try {
+    const [topArtistsRes, topTracksRes, recentRes, playlistsRes] = await Promise.all([
+      spotifyFetch('/v1/me/top/artists?time_range=medium_term&limit=20'),
+      spotifyFetch('/v1/me/top/tracks?time_range=medium_term&limit=20'),
+      spotifyFetch('/v1/me/player/recently-played?limit=20'),
+      spotifyFetch('/v1/me/playlists?limit=20'),
+    ]);
+    const [ta, tt, rp, pl] = await Promise.all([
+      topArtistsRes.json(), topTracksRes.json(), recentRes.json(), playlistsRes.json(),
+    ]);
+    spotifyData = {
+      topArtists: (ta.items || []).map(a => ({ name: a.name, genres: a.genres || [] })),
+      topTracks: (tt.items || []).map(t => ({ name: t.name, artist: t.artists?.[0]?.name || '' })),
+      recentTracks: (rp.items || []).map(i => ({ name: i.track?.name || '', artist: i.track?.artists?.[0]?.name || '' })),
+      playlists: (pl.items || []).map(p => p.name).filter(Boolean),
+    };
+    setStatus('');
+    return true;
+  } catch (err) {
+    if (err.message.includes('expired')) { setSpotifyConnected(false); showError('Spotify session expired. Please reconnect.'); }
+    else showError('Could not load Spotify data: ' + err.message);
+    setStatus('');
+    return false;
+  }
+}
+
+function copySpotifyUri(el) {
+  const uri = window.location.origin + window.location.pathname.replace(/\/$/, '');
+  navigator.clipboard.writeText(uri).then(() => {
+    const orig = el.textContent;
+    el.textContent = 'Copied!';
+    setTimeout(() => { el.textContent = uri; }, 1500);
+  });
+}
+
 // ── Trakt API helper ──────────────────────────────────────────────────────────
 async function traktFetch(path, options = {}) {
   let token = store.get('traktAccessToken');
@@ -829,6 +1241,51 @@ function parseCSVRow(row) {
   return result;
 }
 
+// ── Taste Profile ─────────────────────────────────────────────────────────────
+function selectChip(el) {
+  const group = el.dataset.group;
+  document.querySelectorAll(`.chip[data-group="${group}"]`).forEach(c => c.classList.remove('active'));
+  el.classList.toggle('active');
+}
+
+function saveProfile() {
+  const profile = {
+    titles: document.getElementById('tasteTitles').value.trim(),
+    age: document.querySelector('.chip[data-group="age"].active')?.textContent || '',
+    discovery: document.querySelector('.chip[data-group="discovery"].active')?.textContent || '',
+    era: document.querySelector('.chip[data-group="era"].active')?.textContent || '',
+    dark: document.querySelector('.chip[data-group="dark"].active')?.textContent || '',
+  };
+  store.setJSON('tasteProfile', profile);
+  const el = document.getElementById('profileSaved');
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 2500);
+}
+
+function loadProfile() {
+  const p = store.getJSON('tasteProfile', null);
+  if (!p) return;
+  if (p.titles) document.getElementById('tasteTitles').value = p.titles;
+  ['age', 'discovery', 'era', 'dark'].forEach(group => {
+    if (!p[group]) return;
+    document.querySelectorAll(`.chip[data-group="${group}"]`).forEach(c => {
+      if (c.textContent === p[group]) c.classList.add('active');
+    });
+  });
+}
+
+function getProfileText() {
+  const p = store.getJSON('tasteProfile', null);
+  if (!p) return '';
+  const parts = [];
+  if (p.titles) parts.push(`Titles they love: ${p.titles}`);
+  if (p.age) parts.push(`Age range: ${p.age}`);
+  if (p.discovery) parts.push(`Discovery style: ${p.discovery}`);
+  if (p.era) parts.push(`Era preference: ${p.era}`);
+  if (p.dark) parts.push(`Dark content comfort: ${p.dark}`);
+  return parts.length ? 'Viewer taste profile:\n' + parts.join('\n') : '';
+}
+
 // ── UI helpers ────────────────────────────────────────────────────────────────
 function toggleChip(el) { el.classList.toggle('active'); }
 
@@ -840,9 +1297,8 @@ function toggleCollapse(header) {
 }
 
 function getActiveMoods() {
-  const active = [...document.querySelectorAll('.chip.active')]
-    .filter(c => c.id !== 'englishAudioBtn')
-    .map(c => c.textContent);
+  const chipContainer = currentMode === 'music' ? '#musicMoodChips' : '#moodChips';
+  const active = [...document.querySelectorAll(`${chipContainer} .chip.active`)].map(c => c.textContent);
   const custom = document.getElementById('customMood').value.trim();
   return { chips: active, custom };
 }
@@ -878,7 +1334,7 @@ async function callClaude(prompt, apiKey) {
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -893,9 +1349,13 @@ async function callClaude(prompt, apiKey) {
 
 // ── Prompts ───────────────────────────────────────────────────────────────────
 function buildPrompt(mode, watchedList, seenList, moodText, seed, likedTitles, englishAudio) {
+  const profileText = getProfileText();
   const avoidBlock = watchedList
     ? `Their watch history includes these titles (do NOT recommend any of these):\n${watchedList}\n`
-    : '(No watch history provided — treat as a blank slate)\n';
+    : profileText
+      ? `No watch history provided. Use the taste profile below to guide recommendations.\n`
+      : '(No watch history provided — treat as a blank slate)\n';
+  const profileBlock = profileText ? `\n${profileText}\n` : '';
   const seenBlock = seenList ? `Also do NOT recommend these (already suggested this session): ${seenList}\n` : '';
   const seedBlock = seed ? `\nThe user wants something similar to: ${seed.title} (${seed.year}). Prioritize similar themes, tone, or subject matter.\n` : '';
   const likedBlock = likedTitles?.length ? `\nTitles this user has responded positively to: ${likedTitles.join(', ')} — use these as taste signals.\n` : '';
@@ -906,11 +1366,26 @@ function buildPrompt(mode, watchedList, seenList, moodText, seed, likedTitles, e
     : `{\n  "title": "Film Title",\n  "year": "2019",\n  "runtime": "94 min",\n  "genres": ["Crime", "Politics"],\n  "synopsis": "2-3 sentence synopsis.",\n  "why": "1-2 sentences on why this viewer will love it."\n}`;
 
   const profiles = {
-    documentaries: `You are a documentary recommendation engine for a very experienced viewer who has seen over 1,000 documentaries.\n\n${avoidBlock}\n${seenBlock}\n${seedBlock}\n${likedBlock}\n${audioBlock}\n${moodText}\n\nTaste profile:\n- Loves: crime/justice, corporate corruption, cults/extremism, politics/power, character studies\n- Appreciates deep cuts, not just mainstream hits\n- Values intellectual rigor and systemic truth\n- Dislikes celebrity biopics unless exceptional\n- Has seen most award-winning docs, so go deeper\n\nRecommend ONE documentary. Respond ONLY in this exact JSON format:\n${jsonFormat}`,
-    movies: `You are a film recommendation engine for an experienced cinephile.\n\n${avoidBlock}\n${seenBlock}\n${seedBlock}\n${likedBlock}\n${audioBlock}\n${moodText}\n\nTaste profile:\n- Drawn to complex narratives and morally ambiguous characters\n- Appreciates both mainstream hits and underseen gems\n- Open to any era or country\n- Enjoys thrillers, crime, drama, dark comedy, prestige films\n\nRecommend ONE movie (not documentary). Respond ONLY in this exact JSON format:\n${jsonFormat}`,
-    shows: `You are a TV show recommendation engine for an experienced viewer.\n\n${avoidBlock}\n${seenBlock}\n${seedBlock}\n${likedBlock}\n${audioBlock}\n${moodText}\n\nTaste profile:\n- Loves prestige drama, crime, limited series, smart genre TV\n- Values tight writing and strong performances over spectacle\n- Open to any era or country\n- Not interested in reality TV or pure procedurals\n\nRecommend ONE TV show or limited series. Respond ONLY in this exact JSON format:\n${jsonFormat}`,
+    documentaries: `You are a documentary recommendation engine for a very experienced viewer who has seen over 1,000 documentaries.\n\n${avoidBlock}\n${profileBlock}\n${seenBlock}\n${seedBlock}\n${likedBlock}\n${audioBlock}\n${moodText}\n\nTaste profile:\n- Loves: crime/justice, corporate corruption, cults/extremism, politics/power, character studies\n- Appreciates deep cuts, not just mainstream hits\n- Values intellectual rigor and systemic truth\n- Dislikes celebrity biopics unless exceptional\n- Has seen most award-winning docs, so go deeper\n\nRecommend ONE documentary. Respond ONLY in this exact JSON format:\n${jsonFormat}`,
+    movies: `You are a film recommendation engine for an experienced cinephile.\n\n${avoidBlock}\n${profileBlock}\n${seenBlock}\n${seedBlock}\n${likedBlock}\n${audioBlock}\n${moodText}\n\nTaste profile:\n- Drawn to complex narratives and morally ambiguous characters\n- Appreciates both mainstream hits and underseen gems\n- Open to any era or country\n- Enjoys thrillers, crime, drama, dark comedy, prestige films\n\nRecommend ONE movie (not documentary). Respond ONLY in this exact JSON format:\n${jsonFormat}`,
+    shows: `You are a TV show recommendation engine for an experienced viewer.\n\n${avoidBlock}\n${profileBlock}\n${seenBlock}\n${seedBlock}\n${likedBlock}\n${audioBlock}\n${moodText}\n\nTaste profile:\n- Loves prestige drama, crime, limited series, smart genre TV\n- Values tight writing and strong performances over spectacle\n- Open to any era or country\n- Not interested in reality TV or pure procedurals\n\nRecommend ONE TV show or limited series. Respond ONLY in this exact JSON format:\n${jsonFormat}`,
   };
   return profiles[mode];
+}
+
+function buildMusicPrompt(spotifyData, seenList, moodText, seed, likedTitles) {
+  let contextBlock = '(No Spotify history available — treat as a blank slate)\n';
+  if (spotifyData) {
+    const allGenres = [...new Set(spotifyData.topArtists.flatMap(a => a.genres))].slice(0, 20);
+    const topArtistNames = spotifyData.topArtists.slice(0, 15).map(a => a.name);
+    const recentStr = spotifyData.recentTracks.slice(0, 10).map(t => `${t.artist} — ${t.name}`).join(', ');
+    const playlistStr = spotifyData.playlists.slice(0, 10).join(', ');
+    contextBlock = `Their Spotify listening profile:\n- Top genres: ${allGenres.join(', ') || 'varied'}\n- Top artists: ${topArtistNames.join(', ')}\n- Recently played: ${recentStr || 'not available'}\n- Playlist names (taste signals): ${playlistStr || 'not available'}\n`;
+  }
+  const seenBlock = seenList ? `Do NOT recommend these (already suggested this session): ${seenList}\n` : '';
+  const seedBlock = seed ? `\nThe user wants something similar to: ${seed.title}${seed.artist ? ' by ' + seed.artist : ''}. Prioritize similar sound, mood, or era.\n` : '';
+  const likedBlock = likedTitles?.length ? `\nAlbums this user responded positively to: ${likedTitles.join(', ')} — use these as taste signals.\n` : '';
+  return `You are a music recommendation engine with encyclopedic knowledge of albums across all genres and eras.\n\n${contextBlock}\n${seenBlock}\n${seedBlock}\n${likedBlock}\n${moodText}\n\nRecommend ONE album. Prioritize depth and quality — include both well-known classics and underseen gems. Respond ONLY in this exact JSON format with no other text:\n{\n  "album": "Album Title",\n  "artist": "Artist Name",\n  "year": "1997",\n  "genres": ["Post-Rock", "Ambient"],\n  "synopsis": "2-3 sentences describing the album's sound, feel, and what makes it distinctive.",\n  "why": "1-2 sentences on why this specific listener will connect with it based on their taste."\n}`;
 }
 
 // ── Recommendation ────────────────────────────────────────────────────────────
@@ -923,31 +1398,46 @@ async function getRecommendation() {
   setLoading(true);
   const seedToUse = moreLikeSeed;
   moreLikeSeed = null;
-  setStatus(seedToUse ? `Finding something like "${seedToUse.title}"...` : 'Consulting your watch history...');
+  setStatus(seedToUse ? `Finding something like "${seedToUse.title}"...` : currentMode === 'music' ? 'Building your taste profile...' : 'Consulting your watch history...');
 
   const { chips, custom } = getActiveMoods();
   const moodText = chips.length || custom
     ? `Mood filters: ${chips.join(', ')}${custom ? '. Additional context: ' + custom : ''}`
     : 'No specific mood — just pick something great.';
 
-  const relevantTitles = currentMode === 'shows' ? watchedShowTitles : watchedMovieTitles;
-  const watchedList = [...relevantTitles].slice(0, 800).join(', ');
   const seenList = [...seenThisSession].join(', ');
-
   const history = store.getJSON('history', []);
   const likedTitles = history
     .filter(e => e.feedback === 'liked' && e.mode === currentMode)
     .slice(0, 5)
-    .map(e => e.title);
+    .map(e => e.mode === 'music' ? `${e.artist ? e.artist + ' — ' : ''}${e.title}` : e.title);
 
-  const prompt = buildPrompt(currentMode, watchedList, seenList, moodText, seedToUse, likedTitles, preferEnglishAudio);
+  let prompt;
+  if (currentMode === 'music') {
+    prompt = buildMusicPrompt(spotifyData, seenList, moodText, seedToUse, likedTitles);
+  } else {
+    const relevantTitles = currentMode === 'shows' ? watchedShowTitles : watchedMovieTitles;
+    const watchedList = [...relevantTitles].slice(0, 800).join(', ');
+    prompt = buildPrompt(currentMode, watchedList, seenList, moodText, seedToUse, likedTitles, preferEnglishAudio);
+  }
 
   try {
     const text = await callClaude(prompt, apiKey);
-    const rec = JSON.parse(text.replace(/```json|```/g, '').trim());
+    const raw = JSON.parse(text.replace(/```json|```/g, '').trim());
+
+    let rec;
+    if (currentMode === 'music') {
+      rec = { title: raw.album || raw.title, artist: raw.artist, year: raw.year, genres: raw.genres, synopsis: raw.synopsis, why: raw.why };
+    } else {
+      rec = raw;
+    }
+
     const timestamp = new Date().toISOString();
     lastRec = { ...rec, timestamp };
-    seenThisSession.add(rec.title.toLowerCase());
+    const sessionKey = currentMode === 'music'
+      ? `${(rec.artist || '').toLowerCase()} — ${rec.title.toLowerCase()}`
+      : rec.title.toLowerCase();
+    seenThisSession.add(sessionKey);
     displayResult(rec);
     setLoading(false);
     setStatus('');
@@ -959,7 +1449,7 @@ async function getRecommendation() {
     store.setJSON('history', h);
     renderHistory();
 
-    lookupTrakt(rec.title);
+    if (currentMode !== 'music') lookupTrakt(rec.title);
   } catch (err) {
     setLoading(false);
     setStatus('');
@@ -968,7 +1458,18 @@ async function getRecommendation() {
 }
 
 function displayResult(rec) {
+  const isMusic = currentMode === 'music';
+
   document.getElementById('resYear').textContent = rec.year;
+
+  const artistEl = document.getElementById('resArtist');
+  if (isMusic && rec.artist) {
+    artistEl.textContent = rec.artist;
+    artistEl.style.display = 'block';
+  } else {
+    artistEl.style.display = 'none';
+  }
+
   document.getElementById('resTitle').textContent = rec.title;
   document.getElementById('resSynopsis').textContent = rec.synopsis;
   document.getElementById('resWhy').textContent = rec.why;
@@ -981,19 +1482,25 @@ function displayResult(rec) {
   document.getElementById('nextPickBtn').textContent = nextLabels[currentMode];
 
   const wlBtn = document.getElementById('watchlistBtn');
-  wlBtn.style.display = traktConnected ? 'inline-block' : 'none';
+  wlBtn.style.display = (!isMusic && traktConnected) ? 'inline-block' : 'none';
   wlBtn.textContent = '+ Watchlist';
   wlBtn.disabled = false;
   wlBtn.style.color = '';
   wlBtn.style.borderColor = '';
+  document.getElementById('markSeenBtn').style.display = isMusic ? 'none' : 'inline-block';
+  document.getElementById('justwatchBtn').style.display = isMusic ? 'none' : 'inline-block';
+  document.getElementById('spotifySearchBtn').style.display = isMusic ? 'inline-block' : 'none';
   document.getElementById('likeBtn').style.color = '';
   document.getElementById('likeBtn').style.borderColor = '';
   document.getElementById('dislikeBtn').style.color = '';
   document.getElementById('dislikeBtn').style.borderColor = '';
 
-  document.getElementById('resTraktSection').innerHTML = traktConnected
-    ? '<span class="trakt-loading">Looking up on Trakt...</span>'
-    : '<span style="color:var(--text-dim);font-size:11px">Connect Trakt to see rating</span>';
+  document.getElementById('resTraktRow').style.display = isMusic ? 'none' : 'block';
+  if (!isMusic) {
+    document.getElementById('resTraktSection').innerHTML = traktConnected
+      ? '<span class="trakt-loading">Looking up on Trakt...</span>'
+      : '<span style="color:var(--text-dim);font-size:11px">Connect Trakt to see rating</span>';
+  }
 
   const card = document.getElementById('resultCard');
   card.style.display = 'block';
@@ -1037,8 +1544,15 @@ async function lookupTrakt(title) {
 // ── More Like This ────────────────────────────────────────────────────────────
 function moreLikeThis() {
   if (!lastRec) return;
-  moreLikeSeed = { title: lastRec.title, year: lastRec.year };
+  moreLikeSeed = { title: lastRec.title, year: lastRec.year, artist: lastRec.artist };
   getRecommendation();
+}
+
+// ── Spotify search ────────────────────────────────────────────────────────────
+function openSpotify() {
+  if (!lastRec) return;
+  const query = lastRec.artist ? `${lastRec.artist} ${lastRec.title}` : lastRec.title;
+  window.open(`https://open.spotify.com/search/${encodeURIComponent(query)}`, '_blank');
 }
 
 // ── Add to Trakt Watchlist ────────────────────────────────────────────────────
@@ -1123,16 +1637,19 @@ function renderHistory() {
   const panel = document.getElementById('historyPanel');
   if (!history.length) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  const modeShortMap = { documentaries: 'doc', movies: 'film', shows: 'show' };
+  const modeShortMap = { documentaries: 'doc', movies: 'film', shows: 'show', music: 'alb' };
   document.getElementById('historyList').innerHTML = history.slice(0, 30).map(entry => {
     const date = new Date(entry.timestamp);
     const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const modeShort = modeShortMap[entry.mode] || entry.mode;
     const feedbackIcon = entry.feedback === 'liked' ? ' 👍' : entry.feedback === 'disliked' ? ' 👎' : '';
     const watchlistBadge = entry.addedToWatchlist ? ' <span class="history-watchlist">✓ list</span>' : '';
+    const displayTitle = entry.mode === 'music' && entry.artist
+      ? `${entry.artist} — ${entry.title}`
+      : entry.title;
     return `<div class="history-item">
       <span class="history-mode">${modeShort}</span>
-      <span class="history-title">${entry.title}${feedbackIcon}</span>
+      <span class="history-title">${displayTitle}${feedbackIcon}</span>
       <span class="history-year">${entry.year}</span>
       <span class="history-date">${dateStr}${watchlistBadge}</span>
     </div>`;
@@ -1147,6 +1664,23 @@ function copyRedirectUri(el) {
     el.textContent = 'Copied!';
     setTimeout(() => { el.textContent = uri; }, 1500);
   });
+}
+
+// ── JustWatch ─────────────────────────────────────────────────────────────────
+function openJustWatch() {
+  if (!lastRec) return;
+  const url = `https://www.justwatch.com/us/search?q=${encodeURIComponent(lastRec.title)}`;
+  window.open(url, '_blank');
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function toggleSidebar() {
+  const open = document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarBackdrop').classList.toggle('open', open);
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('open');
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

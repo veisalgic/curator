@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('docpicker', {
   getAllCreds: () => ipcRenderer.invoke('creds:get-all'),
   saveCred: (key, value) => ipcRenderer.invoke('creds:save', { key, value }),
   clearTraktAuth: () => ipcRenderer.invoke('creds:clear-trakt'),
+  clearSpotifyAuth: () => ipcRenderer.invoke('creds:clear-spotify'),
 
   // Trakt
   startTraktOAuth: () => ipcRenderer.invoke('trakt:start-oauth'),
@@ -12,6 +13,12 @@ contextBridge.exposeInMainWorld('docpicker', {
   fetchTraktHistory: () => ipcRenderer.invoke('trakt:fetch-history'),
   traktLookup: (params) => ipcRenderer.invoke('trakt:lookup', params),
   traktAddWatchlist: (params) => ipcRenderer.invoke('trakt:add-watchlist', params),
+  traktMarkSeen: (params) => ipcRenderer.invoke('trakt:mark-seen', params),
+
+  // Spotify
+  startSpotifyOAuth: () => ipcRenderer.invoke('spotify:start-oauth'),
+  exchangeSpotifyCode: (code) => ipcRenderer.invoke('spotify:exchange-code', code),
+  fetchSpotifyData: () => ipcRenderer.invoke('spotify:fetch-data'),
 
   // History
   getHistory: () => ipcRenderer.invoke('history:get'),

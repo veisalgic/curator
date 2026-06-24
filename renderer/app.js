@@ -9,26 +9,34 @@ let seenThisSession = new Set();
 let traktConnected = false;
 let lastRec = null;
 let moreLikeSeed = null;  // { title, year } set by "More Like This"
-let currentMode = 'documentaries'; // 'documentaries' | 'movies' | 'shows'
+let currentMode = 'documentaries'; // 'documentaries' | 'movies' | 'shows' | 'music'
 let embyUrl = '';        // configured Emby server URL
+let preferEnglishAudio = false;
+
+// Spotify state
+let spotifyConnected = false;
+let spotifyData = null; // { topArtists, topTracks, recentTracks, playlists }
 
 // ── Mode Toggle ───────────────────────────────────────────────────────────────
 const taglines = {
   documentaries: 'Personalized documentary recommendations',
   movies: 'Personalized movie recommendations',
   shows: 'Personalized TV show recommendations',
+  music: 'Personalized album recommendations',
 };
 
 const mainBtnLabels = {
   documentaries: '▶  Pick a Documentary',
   movies: '▶  Pick a Movie',
   shows: '▶  Pick a Show',
+  music: '▶  Discover an Album',
 };
 
 const nextLabels = {
   documentaries: 'Next Documentary →',
   movies: 'Next Movie →',
   shows: 'Next Show →',
+  music: 'Next Album →',
 };
 
 function setMode(btn) {
@@ -43,6 +51,13 @@ function setMode(btn) {
   seenThisSession.clear();
   setStatus('');
   showError('');
+
+  // Toggle music vs film mood chips
+  const isMusic = currentMode === 'music';
+  document.getElementById('filmMoodOptions').style.display = isMusic ? 'none' : 'block';
+  document.getElementById('musicMoodOptions').style.display = isMusic ? 'block' : 'none';
+  // Deactivate chips from the hidden set
+  document.querySelectorAll('.chip.active').forEach(c => c.classList.remove('active'));
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -64,6 +79,17 @@ async function init() {
     await loadTraktHistory();
   }
 
+  if (creds.hasSpotifyClientId && creds.hasSpotifyClientSecret) {
+    showSpotifyAuthSection();
+    if (creds.hasSpotifyToken) {
+      setSpotifyConnected(true);
+    }
+  }
+
+  if (creds.hasSpotifyToken) {
+    await loadSpotifyData();
+  }
+
   if (creds.hasAnthropic && creds.hasTraktToken) {
     collapseSetup();
   }
@@ -71,7 +97,8 @@ async function init() {
   // Load Emby URL
   if (creds.embyUrl) {
     embyUrl = creds.embyUrl;
-    document.getElementById('embyUrl').value = creds.embyUrl;
+    const embyEl = document.getElementById('embyUrl');
+    if (embyEl) embyEl.value = creds.embyUrl;
   }
 
   await renderHistory();
@@ -205,6 +232,113 @@ async function loadTraktHistory() {
   }
 }
 
+// ── Spotify OAuth Flow ────────────────────────────────────────────────────────
+async function saveSpotifyCreds() {
+  const clientId = document.getElementById('spotifyClientId').value.trim();
+  const clientSecret = document.getElementById('spotifyClientSecret').value.trim();
+  if (!clientId || !clientSecret) {
+    showError('Enter both Spotify Client ID and Client Secret.');
+    return;
+  }
+  await api.saveCred('spotifyClientId', clientId);
+  await api.saveCred('spotifyClientSecret', clientSecret);
+  const el = document.getElementById('spotifyCredsSaved');
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 2000);
+  showSpotifyAuthSection();
+}
+
+function showSpotifyAuthSection() {
+  document.getElementById('spotifyCredsForm').style.display = 'none';
+  document.getElementById('spotifyAuthSection').style.display = 'block';
+}
+
+function resetSpotifyCreds() {
+  document.getElementById('spotifyCredsForm').style.display = 'block';
+  document.getElementById('spotifyAuthSection').style.display = 'none';
+  document.getElementById('spotifyClientId').value = '';
+  document.getElementById('spotifyClientSecret').value = '';
+}
+
+function setSpotifyConnected(connected) {
+  spotifyConnected = connected;
+  const dot = document.getElementById('spotifyDot');
+  const title = document.getElementById('spotifyStatusTitle');
+  const sub = document.getElementById('spotifyStatusSub');
+  const connectBtn = document.getElementById('spotifyConnectBtn');
+  const disconnectBtn = document.getElementById('spotifyDisconnectBtn');
+
+  if (connected) {
+    dot.className = 'trakt-dot connected';
+    title.textContent = 'Connected';
+    sub.textContent = 'Listening history loaded — Claude will use your taste profile';
+    connectBtn.style.display = 'none';
+    disconnectBtn.style.display = 'inline-block';
+  } else {
+    dot.className = 'trakt-dot';
+    title.textContent = 'Not connected';
+    sub.textContent = 'Click below to authorize with your Spotify account';
+    connectBtn.style.display = 'inline-block';
+    disconnectBtn.style.display = 'none';
+  }
+}
+
+async function connectSpotify() {
+  const btn = document.getElementById('spotifyConnectBtn');
+  btn.textContent = 'Opening browser...';
+  btn.disabled = true;
+  showError('');
+
+  try {
+    setStatus('Waiting for Spotify authorization in browser...');
+    const code = await api.startSpotifyOAuth();
+    setStatus('Exchanging authorization code...');
+    await api.exchangeSpotifyCode(code);
+    setSpotifyConnected(true);
+    await loadSpotifyData();
+    setStatus('');
+  } catch (err) {
+    showError('Spotify auth failed: ' + err.message);
+    setStatus('');
+    setSpotifyConnected(false);
+  } finally {
+    btn.textContent = 'Connect Spotify →';
+    btn.disabled = false;
+  }
+}
+
+async function disconnectSpotify() {
+  await api.clearSpotifyAuth();
+  setSpotifyConnected(false);
+  spotifyData = null;
+}
+
+async function loadSpotifyData() {
+  setStatus('Fetching your Spotify listening history...');
+  try {
+    spotifyData = await api.fetchSpotifyData();
+    setStatus('');
+    return true;
+  } catch (err) {
+    if (err.message.includes('expired')) {
+      setSpotifyConnected(false);
+      showError('Spotify session expired. Please reconnect.');
+    } else {
+      showError('Could not load Spotify data: ' + err.message);
+    }
+    setStatus('');
+    return false;
+  }
+}
+
+function copySpotifyUri(el) {
+  navigator.clipboard.writeText('http://localhost:47822/callback').then(() => {
+    const orig = el.textContent;
+    el.textContent = 'Copied!';
+    setTimeout(() => { el.textContent = orig; }, 1500);
+  });
+}
+
 // ── CSV Fallback ──────────────────────────────────────────────────────────────
 document.getElementById('csvFile').addEventListener('change', function(e) {
   handleFile(e.target.files[0]);
@@ -275,7 +409,8 @@ function toggleCollapse(header) {
 }
 
 function getActiveMoods() {
-  const active = [...document.querySelectorAll('.chip.active')].map(c => c.textContent);
+  const chipContainer = currentMode === 'music' ? '#musicMoodChips' : '#moodChips';
+  const active = [...document.querySelectorAll(`${chipContainer} .chip.active`)].map(c => c.textContent);
   const custom = document.getElementById('customMood').value.trim();
   return { chips: active, custom };
 }
@@ -298,7 +433,7 @@ function showError(msg) {
 }
 
 // ── Prompts per mode ──────────────────────────────────────────────────────────
-function buildPrompt(mode, watchedList, seenList, moodText, seed, likedTitles) {
+function buildPrompt(mode, watchedList, seenList, moodText, seed, likedTitles, englishAudio) {
   const avoidBlock = watchedList
     ? `Their watch history includes these titles (do NOT recommend any of these):\n${watchedList}\n`
     : '(No watch history provided — treat as a blank slate)\n';
@@ -313,6 +448,10 @@ function buildPrompt(mode, watchedList, seenList, moodText, seed, likedTitles) {
 
   const likedBlock = likedTitles && likedTitles.length > 0
     ? `\nTitles this user has responded positively to: ${likedTitles.join(', ')} — use these as taste signals.\n`
+    : '';
+
+  const audioBlock = englishAudio
+    ? `\nIMPORTANT: Only recommend titles where English audio is available (either originally in English or with a quality English dub). Do not recommend foreign-language titles that lack English audio.\n`
     : '';
 
   const jsonFormat = mode === 'shows'
@@ -340,6 +479,7 @@ ${avoidBlock}
 ${seenBlock}
 ${seedBlock}
 ${likedBlock}
+${audioBlock}
 ${moodText}
 
 Their taste profile:
@@ -361,6 +501,7 @@ ${avoidBlock}
 ${seenBlock}
 ${seedBlock}
 ${likedBlock}
+${audioBlock}
 ${moodText}
 
 Their taste profile:
@@ -381,6 +522,7 @@ ${avoidBlock}
 ${seenBlock}
 ${seedBlock}
 ${likedBlock}
+${audioBlock}
 ${moodText}
 
 Their taste profile:
@@ -392,6 +534,58 @@ Their taste profile:
 
 Recommend ONE TV show or limited series. Respond ONLY in this exact JSON format with no other text:
 ${jsonFormat}`;
+}
+
+function buildMusicPrompt(spotifyData, seenList, moodText, seed, likedTitles) {
+  let contextBlock = '(No Spotify history available — treat as a blank slate)\n';
+
+  if (spotifyData) {
+    const allGenres = [...new Set(
+      spotifyData.topArtists.flatMap(a => a.genres)
+    )].slice(0, 20);
+
+    const topArtistNames = spotifyData.topArtists.slice(0, 15).map(a => a.name);
+    const recentStr = spotifyData.recentTracks.slice(0, 10)
+      .map(t => `${t.artist} — ${t.name}`).join(', ');
+    const playlistStr = spotifyData.playlists.slice(0, 10).join(', ');
+
+    contextBlock = `Their Spotify listening profile:
+- Top genres: ${allGenres.join(', ') || 'varied'}
+- Top artists: ${topArtistNames.join(', ')}
+- Recently played: ${recentStr || 'not available'}
+- Playlist names (taste signals): ${playlistStr || 'not available'}
+`;
+  }
+
+  const seenBlock = seenList
+    ? `Do NOT recommend these (already suggested this session): ${seenList}\n`
+    : '';
+
+  const seedBlock = seed
+    ? `\nThe user wants something similar to: ${seed.title}${seed.artist ? ' by ' + seed.artist : ''}. Prioritize similar sound, mood, or era.\n`
+    : '';
+
+  const likedBlock = likedTitles && likedTitles.length > 0
+    ? `\nAlbums this user responded positively to: ${likedTitles.join(', ')} — use these as taste signals.\n`
+    : '';
+
+  return `You are a music recommendation engine with encyclopedic knowledge of albums across all genres and eras.
+
+${contextBlock}
+${seenBlock}
+${seedBlock}
+${likedBlock}
+${moodText}
+
+Recommend ONE album the user hasn't heard. Prioritize depth and quality over popularity — include both well-known classics and underseen gems. Respond ONLY in this exact JSON format with no other text:
+{
+  "album": "Album Title",
+  "artist": "Artist Name",
+  "year": "1997",
+  "genres": ["Post-Rock", "Ambient"],
+  "synopsis": "2-3 sentences describing the album's sound, feel, and what makes it distinctive.",
+  "why": "1-2 sentences on why this specific listener will connect with it based on their taste."
+}`;
 }
 
 // ── Recommendation ────────────────────────────────────────────────────────────
@@ -425,9 +619,6 @@ async function getRecommendation() {
     ? `Mood filters: ${chips.join(', ')}${custom ? '. Additional context: ' + custom : ''}`
     : 'No specific mood — just pick something great.';
 
-  const isShows = currentMode === 'shows';
-  const relevantTitles = isShows ? watchedShowTitles : watchedMovieTitles;
-  const watchedList = [...relevantTitles].slice(0, 800).join(', ');
   const seenList = [...seenThisSession].join(', ');
 
   // Pull liked titles from history as taste signals
@@ -437,18 +628,45 @@ async function getRecommendation() {
     likedTitles = history
       .filter(e => e.feedback === 'liked' && e.mode === currentMode)
       .slice(0, 5)
-      .map(e => e.title);
+      .map(e => e.mode === 'music' ? `${e.artist ? e.artist + ' — ' : ''}${e.title}` : e.title);
   } catch (e) { /* non-fatal */ }
 
-  const prompt = buildPrompt(currentMode, watchedList, seenList, moodText, seedToUse, likedTitles);
+  let prompt;
+  if (currentMode === 'music') {
+    prompt = buildMusicPrompt(spotifyData, seenList, moodText, seedToUse, likedTitles);
+  } else {
+    const isShows = currentMode === 'shows';
+    const relevantTitles = isShows ? watchedShowTitles : watchedMovieTitles;
+    const watchedList = [...relevantTitles].slice(0, 800).join(', ');
+    prompt = buildPrompt(currentMode, watchedList, seenList, moodText, seedToUse, likedTitles, preferEnglishAudio);
+  }
 
   try {
     const text = await api.getRecommendation(prompt);
     const clean = text.replace(/```json|```/g, '').trim();
-    const rec = JSON.parse(clean);
+    const raw = JSON.parse(clean);
+
+    // Normalize music vs film shape
+    let rec;
+    if (currentMode === 'music') {
+      rec = {
+        title: raw.album || raw.title,
+        artist: raw.artist,
+        year: raw.year,
+        genres: raw.genres,
+        synopsis: raw.synopsis,
+        why: raw.why,
+      };
+    } else {
+      rec = raw;
+    }
+
     const timestamp = new Date().toISOString();
     lastRec = { ...rec, timestamp };
-    seenThisSession.add(rec.title.toLowerCase());
+    const sessionKey = currentMode === 'music'
+      ? `${(rec.artist || '').toLowerCase()} — ${rec.title.toLowerCase()}`
+      : rec.title.toLowerCase();
+    seenThisSession.add(sessionKey);
     displayResult(rec);
     setLoading(false);
     setStatus('');
@@ -457,8 +675,8 @@ async function getRecommendation() {
     api.addHistory({ ...rec, mode: currentMode, timestamp, feedback: null, addedToWatchlist: false }).catch(() => {});
     renderHistory().catch(() => {});
 
-    // Trakt lookup (async — updates card when done)
-    lookupTrakt(rec.title);
+    // Trakt lookup (async — updates card when done, skip for music)
+    if (currentMode !== 'music') lookupTrakt(rec.title);
   } catch (err) {
     setLoading(false);
     setStatus('');
@@ -467,7 +685,19 @@ async function getRecommendation() {
 }
 
 function displayResult(rec) {
+  const isMusic = currentMode === 'music';
+
   document.getElementById('resYear').textContent = rec.year;
+
+  // Artist row (music only)
+  const artistEl = document.getElementById('resArtist');
+  if (isMusic && rec.artist) {
+    artistEl.textContent = rec.artist;
+    artistEl.style.display = 'block';
+  } else {
+    artistEl.style.display = 'none';
+  }
+
   document.getElementById('resTitle').textContent = rec.title;
   document.getElementById('resSynopsis').textContent = rec.synopsis;
   document.getElementById('resWhy').textContent = rec.why;
@@ -480,7 +710,7 @@ function displayResult(rec) {
   // Reset action buttons
   document.getElementById('nextPickBtn').textContent = nextLabels[currentMode];
   const wlBtn = document.getElementById('watchlistBtn');
-  wlBtn.style.display = 'inline-block';
+  wlBtn.style.display = isMusic ? 'none' : 'inline-block';
   wlBtn.textContent = '+ Watchlist';
   wlBtn.disabled = false;
   wlBtn.style.color = '';
@@ -492,12 +722,20 @@ function displayResult(rec) {
 
   // Media player buttons
   document.getElementById('playerActions').style.display = 'flex';
-  document.getElementById('embySearchBtn').style.display = 'inline-block';
+  document.getElementById('embySearchBtn').style.display = isMusic ? 'none' : 'inline-block';
+  document.getElementById('infuseSearchBtn').style.display = isMusic ? 'none' : 'inline-block';
+  document.getElementById('spotifySearchBtn').style.display = isMusic ? 'inline-block' : 'none';
 
-  // Trakt section — loading state
-  document.getElementById('resTraktSection').innerHTML = traktConnected
-    ? '<span class="trakt-loading">Looking up on Trakt...</span>'
-    : '<span style="color:var(--text-dim);font-size:11px">Connect Trakt to see rating</span>';
+  // Trakt/streaming section
+  const traktRow = document.getElementById('resTraktRow');
+  if (isMusic) {
+    traktRow.style.display = 'none';
+  } else {
+    traktRow.style.display = 'block';
+    document.getElementById('resTraktSection').innerHTML = traktConnected
+      ? '<span class="trakt-loading">Looking up on Trakt...</span>'
+      : '<span style="color:var(--text-dim);font-size:11px">Connect Trakt to see rating</span>';
+  }
 
   const card = document.getElementById('resultCard');
   card.style.display = 'block';
@@ -545,7 +783,7 @@ function openTraktPage() {
 // ── More Like This ────────────────────────────────────────────────────────────
 function moreLikeThis() {
   if (!lastRec) return;
-  moreLikeSeed = { title: lastRec.title, year: lastRec.year };
+  moreLikeSeed = { title: lastRec.title, year: lastRec.year, artist: lastRec.artist };
   getRecommendation();
 }
 
@@ -596,17 +834,37 @@ function setFeedback(type) {
 }
 
 // ── Mark Seen ─────────────────────────────────────────────────────────────────
-function markSeen() {
-  if (lastRec) {
-    seenThisSession.add(lastRec.title.toLowerCase());
-    if (currentMode === 'shows') {
-      watchedShowTitles.add(lastRec.title.toLowerCase());
-    } else {
-      watchedMovieTitles.add(lastRec.title.toLowerCase());
-    }
-    document.getElementById('resultCard').style.display = 'none';
-    setStatus(`Marked "${lastRec.title}" as seen. Click Pick to get a new recommendation.`);
+async function markSeen() {
+  if (!lastRec) return;
+  seenThisSession.add(lastRec.title.toLowerCase());
+  if (currentMode === 'shows') {
+    watchedShowTitles.add(lastRec.title.toLowerCase());
+  } else {
+    watchedMovieTitles.add(lastRec.title.toLowerCase());
   }
+  document.getElementById('resultCard').style.display = 'none';
+  setStatus(`Marked "${lastRec.title}" as seen.`);
+
+  // Sync to Trakt if connected
+  if (traktConnected) {
+    try {
+      await api.traktMarkSeen({
+        traktId: lastRec.traktData?.traktId,
+        title: lastRec.title,
+        year: lastRec.year,
+        mode: currentMode,
+      });
+      setStatus(`Marked "${lastRec.title}" as seen and synced to Trakt.`);
+    } catch (e) {
+      setStatus(`Marked "${lastRec.title}" as seen (Trakt sync failed: ${e.message})`);
+    }
+  }
+}
+
+function toggleEnglishAudio() {
+  preferEnglishAudio = !preferEnglishAudio;
+  const btn = document.getElementById('englishAudioBtn');
+  btn.classList.toggle('active', preferEnglishAudio);
 }
 
 // ── History Panel ─────────────────────────────────────────────────────────────
@@ -626,7 +884,7 @@ async function renderHistory() {
 
   panel.style.display = 'block';
   const list = document.getElementById('historyList');
-  const modeShortMap = { documentaries: 'doc', movies: 'film', shows: 'show' };
+  const modeShortMap = { documentaries: 'doc', movies: 'film', shows: 'show', music: 'alb' };
   list.innerHTML = history.slice(0, 30).map(entry => {
     const date = new Date(entry.timestamp);
     const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -635,9 +893,12 @@ async function renderHistory() {
     const watchlistBadge = entry.addedToWatchlist
       ? ' <span class="history-watchlist">✓ list</span>'
       : '';
+    const displayTitle = entry.mode === 'music' && entry.artist
+      ? `${entry.artist} — ${entry.title}`
+      : entry.title;
     return `<div class="history-item">
       <span class="history-mode">${modeShort}</span>
-      <span class="history-title">${entry.title}${feedbackIcon}</span>
+      <span class="history-title">${displayTitle}${feedbackIcon}</span>
       <span class="history-year">${entry.year}</span>
       <span class="history-date">${dateStr}${watchlistBadge}</span>
     </div>`;
@@ -678,6 +939,14 @@ function searchInfuse() {
     api.openExternal('infuse7://');
     setTimeout(() => { btn.textContent = orig; }, 3000);
   });
+}
+
+function searchSpotify() {
+  if (!lastRec) return;
+  const query = lastRec.artist
+    ? `${lastRec.artist} ${lastRec.title}`
+    : lastRec.title;
+  api.openExternal(`spotify:search:${encodeURIComponent(query)}`);
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
